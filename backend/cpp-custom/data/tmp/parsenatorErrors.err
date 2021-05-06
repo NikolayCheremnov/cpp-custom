@@ -1,1 +1,1 @@
-error: there are no syntax level errors position: 0 line: 0 line position: 0
+error: 'foo'does not name a type position: 39 line: 1 line position: 19

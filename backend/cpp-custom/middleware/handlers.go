@@ -3,6 +3,7 @@ package middleware
 import (
 	"cpp-custom/internal/filesystem"
 	"cpp-custom/internal/parsenator"
+	"cpp-custom/internal/semanthoid"
 	"cpp-custom/logger"
 	"cpp-custom/models"
 	"encoding/json"
@@ -18,7 +19,7 @@ func Ping(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Context-Type", "application/x-www-form-urlencoded")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	json.NewEncoder(w).Encode(basic_response{Message: "ping OK, port " + Port}) // TODO: added runserver configurations
-	logger.Info.Println("ping OK, port " + Port, r.RemoteAddr)
+	logger.Info.Println("ping OK, port "+Port, r.RemoteAddr)
 }
 
 func CheckForErrors(w http.ResponseWriter, r *http.Request) {
@@ -76,7 +77,7 @@ func CheckForErrors(w http.ResponseWriter, r *http.Request) {
 		if err := recover(); err != nil {
 			Message = "panic occurred: " + fmt.Sprint(err) + " check errors notes"
 		} else {
-			Message = "there are no errors"
+			Message = semanthoid.TreeToString()
 			ParsenatorErrors = "there are no errors"
 			LexinatorErrors = "there are no errors"
 		}
@@ -94,4 +95,3 @@ func CheckForErrors(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
-
