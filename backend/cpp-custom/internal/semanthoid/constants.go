@@ -4,9 +4,9 @@ package semanthoid
 const ProcedureDescription int = 1
 const ProcedureCalling int = 2
 const CompositeOperator int = 3
-const VariableNode int = 4
-const ConstantNode int = 5
-const ForNode int = 6
+const Variable int = 4
+const Constant int = 5
+const For int = 6
 
 // Data Type Labels
 const IntType int = 7

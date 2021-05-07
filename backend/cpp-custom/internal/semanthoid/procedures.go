@@ -13,6 +13,9 @@ func CreateProcedureDescription(identifier string, paramsCount int, paramsTypes 
 	if redefinition != nil {
 		return errors.New("there is already a procedure '" + identifier + "'")
 	}
+	if identifier == "main" && paramsCount > 0 {
+		return errors.New("main must not contain parameters")
+	}
 	// procedure description subtree initialization in insertion
 	node := Node{
 		NodeTypeLabel: ProcedureDescription,
@@ -39,7 +42,7 @@ func CreateProcedureDescription(identifier string, paramsCount int, paramsTypes 
 			}
 		}
 		node.Right = &Node{
-			NodeTypeLabel: VariableNode,
+			NodeTypeLabel: Variable,
 			Identifier:    paramsIdentifiers[0],
 			DataTypeLabel: paramsTypes[0],
 			DataValue:     GetDefaultDataValue(),
@@ -48,7 +51,7 @@ func CreateProcedureDescription(identifier string, paramsCount int, paramsTypes 
 		subCurrent := node.Right
 		for i := 1; i < paramsCount; i++ {
 			subCurrent.Left = &Node{
-				NodeTypeLabel: VariableNode,
+				NodeTypeLabel: Variable,
 				Identifier:    paramsIdentifiers[i],
 				DataTypeLabel: paramsTypes[i],
 				DataValue:     GetDefaultDataValue(),

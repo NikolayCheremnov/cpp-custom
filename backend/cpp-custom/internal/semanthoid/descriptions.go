@@ -12,7 +12,7 @@ func InsertionPoint() string {
 }
 
 func CreateDescription(descriptionType int, identifier string, dataType int, value *DataTypeValue) (*Node, error) {
-	if descriptionType != VariableNode && descriptionType != ConstantNode {
+	if descriptionType != Variable && descriptionType != Constant {
 		return nil, errors.New("unknown description type")
 	}
 	if dataType != IntType && dataType != BoolType {
@@ -22,7 +22,7 @@ func CreateDescription(descriptionType int, identifier string, dataType int, val
 		value = GetDefaultDataValue()
 	}
 	return &Node{
-		NodeTypeLabel: VariableNode,
+		NodeTypeLabel: Variable,
 		Identifier:    identifier,
 		DataTypeLabel: dataType,
 		DataValue:     value,

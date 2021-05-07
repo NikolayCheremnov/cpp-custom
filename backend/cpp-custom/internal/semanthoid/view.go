@@ -21,7 +21,7 @@ func (node *Node) ToString() string {
 			}
 		}
 		break
-	case VariableNode, ConstantNode:
+	case Variable, Constant:
 		res += ": data type " + strconv.Itoa(node.DataTypeLabel)
 		res += ": data value bool " + strconv.Itoa(node.DataValue.DataAsBool) + " int " + strconv.Itoa(node.DataValue.DataAsInt)
 		break
