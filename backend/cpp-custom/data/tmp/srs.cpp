@@ -1,7 +1,4 @@
-void main() {
+// first good test
 
-}
+const int a = 2;
 
-void foo(int a) {
-    bool bar;
-}

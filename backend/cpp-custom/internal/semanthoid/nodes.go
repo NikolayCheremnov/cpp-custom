@@ -2,8 +2,6 @@ package semanthoid
 
 import (
 	"errors"
-	"strconv"
-	"strings"
 )
 
 var Root *Node = nil
@@ -73,59 +71,4 @@ func (node *Node) FindUpInCurrentRightSubTree(nodeType int, identifier string) *
 	} else {
 		return node.Parent.FindUpInCurrentRightSubTree(nodeType, identifier)
 	}
-}
-
-// display methods
-
-func (node *Node) ToString() string {
-	res := ""
-	if node == Current {
-		res += "current: "
-	}
-	res += "node type " + strconv.Itoa(node.NodeTypeLabel) + ": identifier " + node.Identifier
-	switch node.NodeTypeLabel { // special view for each node type
-	case ProcedureDescription:
-		res += ": params count " + strconv.Itoa(node.ParamsCount)
-		if node.ParamsCount > 0 {
-			res += ": params types"
-			for _, paramType := range node.ParamsTypes {
-				res += " " + strconv.Itoa(paramType)
-			}
-		}
-		break
-	case VariableNode, ConstantNode:
-		res += ": data type " + strconv.Itoa(node.DataTypeLabel)
-		res += ": data value bool " + strconv.Itoa(node.DataValue.DataAsBool) + " int " + strconv.Itoa(node.DataValue.DataAsInt)
-		break
-	default:
-		res += ": there are no additional information for node"
-	}
-	return res
-}
-
-func TreeToString() string {
-	if Root != nil {
-		return Root.TreeToString(1)
-	}
-	return "{ nil }"
-}
-
-// ROOT-RIGHT-LEFT scheme
-func (node *Node) TreeToString(offset int) string {
-	lowerOffsetStr := strings.Repeat("\t", offset-1)
-	upperOffsetStr := strings.Repeat("\t", offset)
-	nodeStr := upperOffsetStr + node.ToString() + "\n"
-	var left string
-	if node.Left != nil {
-		left = node.Left.TreeToString(offset + 1)
-	} else {
-		left = upperOffsetStr + "{ nil }\n"
-	}
-	var right string
-	if node.Right != nil {
-		right = node.Right.TreeToString(offset + 1)
-	} else {
-		right = upperOffsetStr + "{ nil }\n"
-	}
-	return lowerOffsetStr + "{\n" + nodeStr + right + left + lowerOffsetStr + "}\n"
 }

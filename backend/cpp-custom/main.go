@@ -19,6 +19,7 @@ func main() {
 		loggers := make(map[string]string)
 		loggers["memory_l"] = "memory"
 		loggers["procedures_tree_l"] = "procedures_tree"
+		loggers["tree_l"] = "tree"
 		err = logger.Init(loggers)
 		if err != nil {
 			panic("error logger initializing")

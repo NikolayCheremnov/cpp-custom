@@ -82,7 +82,15 @@ func (A *Analyzer) GlobalDescriptions() error {
 			lexType == lexinator.Bool ||
 			lexType == lexinator.Const { // <описание>
 			A.scanner.RestorePosValues(textPos, line, linePos)
-			//A.description()
+			descriptionSubtree := A.description(semanthoid.Root)
+			if semanthoid.Root == nil {
+				semanthoid.Root = descriptionSubtree
+				semanthoid.Current = descriptionSubtree
+			} else {
+				semanthoid.Current.Left = descriptionSubtree
+				descriptionSubtree.Parent = semanthoid.Current
+				semanthoid.Current = descriptionSubtree
+			}
 		} else if lexType != lexinator.Semicolon { // then must be ';'
 			A.printPanicError("invalid lexeme '" + lex + "', expected ';'")
 		}
@@ -90,6 +98,7 @@ func (A *Analyzer) GlobalDescriptions() error {
 		lexType, lex = A.scanner.Scan()
 	}
 	A.printError("there are no syntax level errors")
+	logger.Log("tree_l", "endpoint tree:\n"+semanthoid.Root.TreeToString(1))
 	return nil
 }
 
@@ -173,7 +182,7 @@ func (A *Analyzer) procedure() *semanthoid.Node {
 	if lexType != lexinator.Id {
 		A.printPanicError("'" + lex + "' is not an identifier")
 	}
-	procedureDescription := semanthoid.FindFromNodeAmongLeft(semanthoid.Root, semanthoid.ProcedureDescription, lex)
+	procedureDescription := semanthoid.FindFromNodeAmongLeft(semanthoid.ProceduresRoot, semanthoid.ProcedureDescription, lex)
 	paramsCount := 0
 	if procedureDescription == nil {
 		A.printPanicError("undefined procedure '" + lex + "'")
@@ -323,7 +332,7 @@ func (A *Analyzer) _for() *semanthoid.Node {
 		}
 	}
 	A.operator()
-	return &semanthoid.Node{NodeTypeLabel: semanthoid.ForNode, Identifier: "for plug"} // TODO: remove the plug, do it normally
+	return &semanthoid.Node{NodeTypeLabel: semanthoid.ForNode, Identifier: "_for"} // TODO: remove the plug, do it normally
 }
 
 // <константы>
@@ -538,6 +547,7 @@ func (A *Analyzer) operatorsAndDescriptions() *semanthoid.Node {
 }
 
 // <описание> -> <переменные>; | <константы>;
+// receives current nearest description subtree
 // returns description subtree node
 func (A *Analyzer) description(subtree *semanthoid.Node) (descriptionSubtree *semanthoid.Node) {
 	textPos, line, linePos := A.scanner.StorePosValues()

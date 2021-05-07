@@ -14,6 +14,7 @@ const BoolType int = 8
 
 // keywords nodes identifiers
 const CompositeOperatorIdentifier string = "_composite_operator"
+const ForIdentifier string = "_for"
 
 // Error Type
 const Error = -1
