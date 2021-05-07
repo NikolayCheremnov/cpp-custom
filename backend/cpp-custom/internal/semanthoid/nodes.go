@@ -16,6 +16,10 @@ type DataTypeValue struct {
 	DataAsBool int
 }
 
+func GetDefaultDataValue() *DataTypeValue {
+	return &DataTypeValue{0, 0}
+}
+
 type Node struct {
 	NodeTypeLabel int
 	Identifier    string
@@ -43,6 +47,13 @@ func CreateTree(node *Node) error {
 }
 
 // find procedures and methods
+func FindDownLeft(node *Node, nodeType int, identifier string) *Node {
+	if node == nil || (node.NodeTypeLabel == nodeType && node.Identifier == identifier) {
+		return node
+	}
+	return FindDownLeft(node.Left, nodeType, identifier)
+}
+
 func FindFromNodeAmongLeft(node *Node, nodeType int, identifier string) *Node {
 	if node == nil || (node.NodeTypeLabel == nodeType && node.Identifier == identifier) {
 		return node
@@ -67,7 +78,11 @@ func (node *Node) FindUpInCurrentRightSubTree(nodeType int, identifier string) *
 // display methods
 
 func (node *Node) ToString() string {
-	res := "node type " + strconv.Itoa(node.NodeTypeLabel) + ": identifier " + node.Identifier
+	res := ""
+	if node == Current {
+		res += "current: "
+	}
+	res += "node type " + strconv.Itoa(node.NodeTypeLabel) + ": identifier " + node.Identifier
 	switch node.NodeTypeLabel { // special view for each node type
 	case ProcedureDescription:
 		res += ": params count " + strconv.Itoa(node.ParamsCount)

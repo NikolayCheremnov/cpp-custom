@@ -3,6 +3,7 @@ package parsenator
 import (
 	"cpp-custom/internal/lexinator"
 	"cpp-custom/internal/semanthoid"
+	"cpp-custom/logger"
 	"errors"
 	"fmt"
 	"io"
@@ -33,6 +34,8 @@ func Preparing(srsFileName string, scannerErrWriter io.Writer, analyzerErrWriter
 		// TODO: add saving parse tree
 		semanthoid.Root = nil
 		semanthoid.Current = nil
+		semanthoid.ProceduresRoot = nil
+		semanthoid.LastProcedure = nil
 	}
 	// ready for parsing
 	A.isPrepared = true
@@ -79,7 +82,7 @@ func (A *Analyzer) GlobalDescriptions() error {
 			lexType == lexinator.Bool ||
 			lexType == lexinator.Const { // <описание>
 			A.scanner.RestorePosValues(textPos, line, linePos)
-			A.description()
+			//A.description()
 		} else if lexType != lexinator.Semicolon { // then must be ';'
 			A.printPanicError("invalid lexeme '" + lex + "', expected ';'")
 		}
@@ -91,13 +94,14 @@ func (A *Analyzer) GlobalDescriptions() error {
 }
 
 // <описание параметров> ->
-// return paramsCount and paramsTypes
-func (A *Analyzer) parameterDescription() (int, []int) {
+// return paramsCount, paramsTypes and paramsIdentifiers
+func (A *Analyzer) parameterDescription() (int, []int, []string) {
 	var textPos, line, linePos int
 	var lexType int
 	var lex string
 	isFirst, paramsCount := true, 0
 	var paramsTypes []int
+	var paramsIdentifiers []string
 	for isFirst || lexType == lexinator.Comma {
 		isFirst = false
 		paramsTypes = append(paramsTypes, A._type())
@@ -106,11 +110,12 @@ func (A *Analyzer) parameterDescription() (int, []int) {
 		if lexType != lexinator.Id {
 			A.printPanicError("'" + lex + "' is not an identifier")
 		}
+		paramsIdentifiers = append(paramsIdentifiers, lex)
 		textPos, line, linePos = A.scanner.StorePosValues()
 		lexType, lex = A.scanner.Scan()
 	}
 	A.scanner.RestorePosValues(textPos, line, linePos)
-	return paramsCount, paramsTypes
+	return paramsCount, paramsTypes, paramsIdentifiers
 }
 
 // <параметры> -> идентификатор | константа U , <параметры> | e
@@ -163,7 +168,7 @@ func (A *Analyzer) multiplier() {
 }
 
 // <процедура> -> идентификатор ( ) | идентификатор ( <параметры> )
-func (A *Analyzer) procedure() {
+func (A *Analyzer) procedure() *semanthoid.Node {
 	lexType, lex := A.scanner.Scan()
 	if lexType != lexinator.Id {
 		A.printPanicError("'" + lex + "' is not an identifier")
@@ -190,6 +195,7 @@ func (A *Analyzer) procedure() {
 	if paramsCount != procedureDescription.ParamsCount {
 		A.printPanicError("invalid arguments number in '" + procedureDescription.Identifier + "' calling")
 	}
+	return &semanthoid.Node{NodeTypeLabel: semanthoid.ProcedureCalling, Identifier: "plug"} // TODO: remove the plug, do it normally
 }
 
 // <слагаемое> -> <множитель> U +- | e
@@ -282,7 +288,7 @@ func (A *Analyzer) variable() (string, *semanthoid.DataTypeValue) {
 }
 
 // <for> -> for ( <оператор for> ; U <выражение> | e U ; U <присваивание> | e U ) <оператор>
-func (A *Analyzer) _for() {
+func (A *Analyzer) _for() *semanthoid.Node {
 	lexType, lex := A.scanner.Scan()
 	if lexType != lexinator.For {
 		A.printPanicError("invalid lexeme '" + lex + "', expected 'for'")
@@ -317,63 +323,106 @@ func (A *Analyzer) _for() {
 		}
 	}
 	A.operator()
+	return &semanthoid.Node{NodeTypeLabel: semanthoid.ForNode, Identifier: "for plug"} // TODO: remove the plug, do it normally
 }
 
 // <константы>
-func (A *Analyzer) constants() {
+// receives current right subtree root
+func (A *Analyzer) constants(subtree *semanthoid.Node) *semanthoid.Node {
 	lexType, lex := A.scanner.Scan()
 	if lexType != lexinator.Const {
 		A.printPanicError("invalid lexeme '" + lex + "', expected 'const'")
 	}
+	var constantsSubtree *semanthoid.Node = nil
+	var constantLeaf *semanthoid.Node = nil
 	constsType := A._type()
 	var textPos, line, linePos int
 	isFirst := true
 	for isFirst || lexType == lexinator.Comma {
 		isFirst = false
 		identifier, value := A.assigment()
-		err := semanthoid.CreateDescription(semanthoid.ConstantNode, identifier, constsType, value)
+		redefinition := semanthoid.FindDownLeft(subtree, semanthoid.VariableNode, identifier)
+		if redefinition != nil {
+			A.printPanicError("there is already a variable named '" + identifier + "'")
+		}
+		redefinition = semanthoid.FindDownLeft(subtree, semanthoid.ConstantNode, identifier)
+		if redefinition != nil {
+			A.printPanicError("there is already a constant named '" + identifier + "'")
+		}
+		constantNode, err := semanthoid.CreateDescription(semanthoid.ConstantNode, identifier, constsType, value)
 		if err != nil {
 			A.printPanicError(err.Error())
+		}
+		if constantsSubtree == nil {
+			constantsSubtree = constantNode
+			constantLeaf = constantNode
+		} else {
+			constantLeaf.Left = constantNode
+			constantNode.Parent = constantLeaf
+			constantLeaf = constantNode
 		}
 		textPos, line, linePos = A.scanner.StorePosValues()
 		lexType, lex = A.scanner.Scan()
 	}
 	A.scanner.RestorePosValues(textPos, line, linePos)
+	return constantsSubtree
 }
 
 // <переменные> -> long int | short int | int | bool U e | <присваивание> U e | , <присваивание>
-func (A *Analyzer) variables() {
+// receives current right subtree root
+// returns variables subtree
+func (A *Analyzer) variables(subtree *semanthoid.Node) *semanthoid.Node {
+	var variablesSubtree *semanthoid.Node = nil
+	var variableLeaf *semanthoid.Node = nil
 	varsType := A._type()
 	var lexType, textPos, line, linePos int
 	isFirst := true
 	for isFirst || lexType == lexinator.Comma {
 		isFirst = false
 		identifier, value := A.variable()
-		err := semanthoid.CreateDescription(semanthoid.VariableNode, identifier, varsType, value)
+		redefinition := semanthoid.FindDownLeft(subtree, semanthoid.VariableNode, identifier)
+		if redefinition != nil {
+			A.printPanicError("there is already a variable named '" + identifier + "'")
+		}
+		redefinition = semanthoid.FindDownLeft(subtree, semanthoid.ConstantNode, identifier)
+		if redefinition != nil {
+			A.printPanicError("there is already a constant named '" + identifier + "'")
+		}
+		variableNode, err := semanthoid.CreateDescription(semanthoid.VariableNode, identifier, varsType, value)
 		if err != nil {
 			A.printPanicError(err.Error())
+		}
+		if variablesSubtree == nil {
+			variablesSubtree = variableNode
+			variableLeaf = variableNode
+		} else {
+			variableLeaf.Left = variableNode
+			variableNode.Parent = variableLeaf
+			variableLeaf = variableNode
 		}
 		textPos, line, linePos = A.scanner.StorePosValues()
 		lexType, _ = A.scanner.Scan()
 	}
 	A.scanner.RestorePosValues(textPos, line, linePos)
+	return variablesSubtree
 }
 
 // <оператор> -> <составной оператор> | <for> | <процедура> ; | <присваивание>; | ;
-func (A *Analyzer) operator() {
+func (A *Analyzer) operator() *semanthoid.Node {
+	var operatorSubtree *semanthoid.Node = nil
 	textPos, line, linePos := A.scanner.StorePosValues()
 	lexType, lex := A.scanner.Scan()
 	if lexType == lexinator.OpeningBrace { // составной оператор
 		A.scanner.RestorePosValues(textPos, line, linePos)
-		A.compositeOperator()
+		operatorSubtree = A.compositeOperator()
 	} else if lexType == lexinator.For { // for
 		A.scanner.RestorePosValues(textPos, line, linePos)
-		A._for()
+		operatorSubtree = A._for()
 	} else if lexType == lexinator.Id { // процедура или присваивание
 		lexType, lex = A.scanner.Scan()
 		if lexType == lexinator.OpeningBracket { // процедура
 			A.scanner.RestorePosValues(textPos, line, linePos)
-			A.procedure()
+			operatorSubtree = A.procedure()
 		} else if lexType == lexinator.Assignment { // присваивание
 			A.scanner.RestorePosValues(textPos, line, linePos)
 			A.assigment()
@@ -387,6 +436,7 @@ func (A *Analyzer) operator() {
 	} else if lexType != lexinator.Semicolon {
 		A.printPanicError("invalid lexeme '" + lex + "', expected ';'")
 	}
+	return operatorSubtree
 }
 
 // <описание процедуры> -> void идентификатор ( U <описание параметров> | e U ) <составной оператор>
@@ -395,6 +445,7 @@ func (A *Analyzer) procedureDescription() {
 	var procedureIdentifier string
 	var paramsCount int
 	var paramsTypes []int
+	var paramsIdentifiers []string
 	// parsing
 	lexType, lex := A.scanner.Scan()
 	if lexType != lexinator.Void { // void
@@ -414,7 +465,7 @@ func (A *Analyzer) procedureDescription() {
 	if lexType == lexinator.Long || lexType == lexinator.Int ||
 		lexType == lexinator.Short || lexType == lexinator.Bool { // <описание параметров>
 		A.scanner.RestorePosValues(textPos, line, linePos)
-		paramsCount, paramsTypes = A.parameterDescription()
+		paramsCount, paramsTypes, paramsIdentifiers = A.parameterDescription()
 		lexType, lex = A.scanner.Scan()
 		if lexType != lexinator.ClosingBracket {
 			A.printPanicError("invalid lexeme '" + lex + "', expected ')'")
@@ -422,49 +473,73 @@ func (A *Analyzer) procedureDescription() {
 	} else if lexType != lexinator.ClosingBracket { // )
 		A.printPanicError("invalid lexeme '" + lex + "', expected ')'")
 	}
-	procedureNode, err := semanthoid.CreateProcedureDescription(procedureIdentifier, paramsCount, paramsTypes)
+	procedureBody := A.compositeOperator()
+	err := semanthoid.CreateProcedureDescription(procedureIdentifier, paramsCount, paramsTypes, paramsIdentifiers, procedureBody)
 	if err != nil {
 		A.printPanicError(err.Error())
 	}
-	A.compositeOperator()
-	semanthoid.Current = procedureNode // set procedure node as current
+	logger.Log("procedures_tree_l", "'"+procedureIdentifier+"' procedure description added to procedures tree: \n"+
+		semanthoid.ProceduresRoot.TreeToString(1))
 }
 
 // <составной оператор> -> { <операторы и описания> }
-func (A *Analyzer) compositeOperator() {
-	compositeOperatorNode := semanthoid.CreateCompositeOperator() // store operator node
+// returns composite operator subtree
+func (A *Analyzer) compositeOperator() *semanthoid.Node {
+	CompositeOperator := semanthoid.CreateCompositeOperator()
 	lexType, lex := A.scanner.Scan()
 	if lexType != lexinator.OpeningBrace {
 		A.printPanicError("invalid lexeme '" + lex + "', expected '{'")
 	}
-	A.operatorsAndDescriptions()
+	subtree := A.operatorsAndDescriptions()
+	if subtree != nil {
+		CompositeOperator.Left = subtree
+		subtree.Parent = CompositeOperator
+	}
 	lexType, lex = A.scanner.Scan()
 	if lexType != lexinator.ClosingBrace {
 		A.printPanicError("invalid lexeme '" + lex + "', expected '}'")
 	}
-	semanthoid.Current = compositeOperatorNode // restore operator node
+	return CompositeOperator
 }
 
 // <операторы и описания> -> e | <операторы> U e | <операторы и описания>  | <описания> + e | <операторы и описания>
-func (A *Analyzer) operatorsAndDescriptions() {
+func (A *Analyzer) operatorsAndDescriptions() *semanthoid.Node {
+	var subtree *semanthoid.Node = nil
+	var leaf *semanthoid.Node = nil
+	addLeaf := func(node *semanthoid.Node) {
+		if node != nil { // if there is something to add
+			if subtree == nil { // if first in block
+				subtree = node
+				leaf = node
+			} else {
+				leaf.Left = node
+				node.Parent = leaf
+				leaf = node
+			}
+		}
+	}
+
 	for {
 		textPos, line, linePos := A.scanner.StorePosValues()
 		lexType, _ := A.scanner.Scan()
 		A.scanner.RestorePosValues(textPos, line, linePos)
 		if lexType == lexinator.OpeningBrace || lexType == lexinator.For ||
 			lexType == lexinator.Id || lexType == lexinator.Semicolon { // if operator
-			A.operator()
+			addLeaf(A.operator())
 		} else if lexType == lexinator.Long || lexType == lexinator.Short ||
 			lexType == lexinator.Int || lexType == lexinator.Bool || lexType == lexinator.Const { // if description
-			A.description()
+			addLeaf(A.description(subtree))
 		} else { // e
 			break
 		}
 	}
+
+	return subtree
 }
 
 // <описание> -> <переменные>; | <константы>;
-func (A *Analyzer) description() {
+// returns description subtree node
+func (A *Analyzer) description(subtree *semanthoid.Node) (descriptionSubtree *semanthoid.Node) {
 	textPos, line, linePos := A.scanner.StorePosValues()
 	lexType, lex := A.scanner.Scan()
 	if lexType == lexinator.Long ||
@@ -472,10 +547,10 @@ func (A *Analyzer) description() {
 		lexType == lexinator.Int ||
 		lexType == lexinator.Bool { // <переменные>
 		A.scanner.RestorePosValues(textPos, line, linePos)
-		A.variables()
+		descriptionSubtree = A.variables(subtree)
 	} else if lexType == lexinator.Const { // <константы>
 		A.scanner.RestorePosValues(textPos, line, linePos)
-		A.constants()
+		descriptionSubtree = A.constants(subtree)
 	} else {
 		A.printPanicError("'" + lex + "'" + "does not name a type")
 	}
@@ -483,6 +558,7 @@ func (A *Analyzer) description() {
 	if lexType != lexinator.Semicolon {
 		A.printPanicError("invalid lexeme '" + lex + "', expected ';'")
 	}
+	return descriptionSubtree
 }
 
 // <тип> -> long int | short int | int | bool

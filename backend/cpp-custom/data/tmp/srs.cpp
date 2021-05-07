@@ -1,4 +1,7 @@
-int a = 2;
-void main(int a, bool b, foo c) {
+void main() {
 
+}
+
+void foo(int a) {
+    bool bar;
 }

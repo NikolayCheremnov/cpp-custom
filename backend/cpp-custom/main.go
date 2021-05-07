@@ -13,12 +13,20 @@ import (
 func main() {
 	err := godotenv.Load(".env")
 	if err != nil {
-		logger.Error.Println("Error loading .env file")
+		panic("error loading .env file")
+	}
+	if os.Getenv("ENABLE_LOGGING") == "true" {
+		loggers := make(map[string]string)
+		loggers["memory_l"] = "memory"
+		loggers["procedures_tree_l"] = "procedures_tree"
+		err = logger.Init(loggers)
+		if err != nil {
+			panic("error logger initializing")
+		}
 	}
 	port := os.Getenv("GO_APP_PORT")
 	middleware.Port = port
 	r := router.Router()
 	logger.Info.Println("Starting server on the port " + port + " ...") // TODO: added runserver configurations
-	log.Fatal(http.ListenAndServe(":" + port, r))
+	log.Fatal(http.ListenAndServe(":"+port, r))
 }
-
