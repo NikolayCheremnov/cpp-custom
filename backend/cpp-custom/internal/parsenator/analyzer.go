@@ -177,7 +177,7 @@ func (A *Analyzer) multiplier() {
 }
 
 // <процедура> -> идентификатор ( ) | идентификатор ( <параметры> )
-func (A *Analyzer) procedure() *semanthoid.Node {
+func (A *Analyzer) procedure() {
 	lexType, lex := A.scanner.Scan()
 	if lexType != lexinator.Id {
 		A.printPanicError("'" + lex + "' is not an identifier")
@@ -206,7 +206,6 @@ func (A *Analyzer) procedure() *semanthoid.Node {
 	if paramsCount != procedureDescription.ParamsCount {
 		A.printPanicError("invalid arguments number in '" + procedureDescription.Identifier + "' calling")
 	}
-	return &semanthoid.Node{NodeTypeLabel: semanthoid.ProcedureCalling, Identifier: "plug"} // TODO: remove the plug, do it normally
 }
 
 // <слагаемое> -> <множитель> U +- | e
@@ -437,7 +436,7 @@ func (A *Analyzer) operator() *semanthoid.Node {
 		lexType, lex = A.scanner.Scan()
 		if lexType == lexinator.OpeningBracket { // процедура
 			A.scanner.RestorePosValues(textPos, line, linePos)
-			operatorSubtree = A.procedure()
+			A.procedure()
 		} else if lexType == lexinator.Assignment { // присваивание
 			A.scanner.RestorePosValues(textPos, line, linePos)
 			A.assigment()
