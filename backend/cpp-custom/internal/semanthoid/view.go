@@ -12,15 +12,6 @@ func (node *Node) ToString() string {
 	}
 	res += "node type " + strconv.Itoa(node.NodeTypeLabel) + ": identifier " + node.Identifier
 	switch node.NodeTypeLabel { // special view for each node type
-	case ProcedureDescription:
-		res += ": params count " + strconv.Itoa(node.ParamsCount)
-		if node.ParamsCount > 0 {
-			res += ": params types"
-			for _, paramType := range node.ParamsTypes {
-				res += " " + strconv.Itoa(paramType)
-			}
-		}
-		break
 	case Variable, Constant:
 		res += ": data type " + strconv.Itoa(node.DataTypeLabel)
 		res += ": data value bool " + strconv.Itoa(node.DataValue.DataAsBool) + " int " + strconv.Itoa(node.DataValue.DataAsInt)

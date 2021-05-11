@@ -1,13 +1,11 @@
 package semanthoid
 
-import (
-	"errors"
-)
-
 var Root *Node = nil
 var Current *Node = nil
 
 var DEBUG_MODE bool = false
+
+// data types
 
 type DataTypeValue struct {
 	DataAsInt  int
@@ -18,15 +16,27 @@ func GetDefaultDataValue() *DataTypeValue {
 	return &DataTypeValue{0, 0}
 }
 
+func IntToBool(dataAsInt int) int {
+	if dataAsInt != 0 {
+		return 1
+	}
+	return 0
+}
+
+func GoBoolToInt(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
+}
+
+// nodes tree
+
 type Node struct {
 	NodeTypeLabel int
 	Identifier    string
 
-	// for procedure
-	ParamsCount int
-	ParamsTypes []int
-
-	// for variables
+	// for variables and constants
 	DataTypeLabel int
 	DataValue     *DataTypeValue
 
@@ -36,15 +46,24 @@ type Node struct {
 	Parent *Node
 }
 
-func CreateTree(node *Node) error {
-	if Current != nil {
-		Current = node
+// find procedures and methods
+func FindDataUpFromCurrent(identifier string) *Node {
+	if Current == nil {
 		return nil
 	}
-	return errors.New("empty tree root")
+	return Current.FindDataUp(identifier)
 }
 
-// find procedures and methods
+func (node *Node) FindDataUp(identifier string) *Node {
+	if (node.NodeTypeLabel == Variable || node.NodeTypeLabel == Constant) && node.Identifier == identifier {
+		return node
+	}
+	if node.Parent == nil {
+		return nil
+	}
+	return node.Parent.FindDataUp(identifier)
+}
+
 func FindDownLeft(node *Node, nodeType int, identifier string) *Node {
 	if node == nil || (node.NodeTypeLabel == nodeType && node.Identifier == identifier) {
 		return node

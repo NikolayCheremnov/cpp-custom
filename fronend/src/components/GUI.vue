@@ -70,14 +70,25 @@ export default {
 </script>
 
 <style scoped>
+
+label {
+  color: rgb(130, 165, 138);
+}
 textarea {
   font-size: 10px;
+  background-color: rgb(46, 51, 56);
+  color: rgb(0, 153, 255);
+}
+textarea:focus {
+  background-color: rgb(46, 51, 56);
+  color: rgb(0, 153, 255);
 }
 #syntax-errors {
   color: red;
 }
 
 button {
+  margin: 10px;
   width: 100%;
 }
 </style>
