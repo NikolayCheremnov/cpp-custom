@@ -456,7 +456,7 @@ func (A *Analyzer) constants() {
 				dataValue = &semanthoid.DataTypeValue{DataAsInt: value, DataAsBool: semanthoid.IntToBool(value)}
 				break
 			case semanthoid.BoolType:
-				dataValue = &semanthoid.DataTypeValue{DataAsInt: value, DataAsBool: value}
+				dataValue = &semanthoid.DataTypeValue{DataAsInt: semanthoid.IntToBool(value), DataAsBool: semanthoid.IntToBool(value)}
 				break
 			}
 			err := semanthoid.CreateGlobalDescription(semanthoid.Constant, identifier, constsType, dataValue)
@@ -487,7 +487,7 @@ func (A *Analyzer) variables() {
 				dataValue = &semanthoid.DataTypeValue{DataAsInt: value, DataAsBool: semanthoid.IntToBool(value)}
 				break
 			case semanthoid.BoolType:
-				dataValue = &semanthoid.DataTypeValue{DataAsInt: value, DataAsBool: value}
+				dataValue = &semanthoid.DataTypeValue{DataAsInt: semanthoid.IntToBool(value), DataAsBool: semanthoid.IntToBool(value)}
 				break
 			}
 			err := semanthoid.CreateGlobalDescription(semanthoid.Variable, identifier, varsType, dataValue)
@@ -673,8 +673,8 @@ func (A *Analyzer) _type() int {
 		}
 	}
 	if lexType == lexinator.Bool {
-		return semanthoid.IntType
-	} else {
 		return semanthoid.BoolType
+	} else {
+		return semanthoid.IntType
 	}
 }

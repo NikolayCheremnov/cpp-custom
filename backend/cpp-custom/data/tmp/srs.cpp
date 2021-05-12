@@ -1,6 +1,4 @@
 int a = 2;
-bool c = a;
-
-void main() {
-
-}
+bool b = a;
+int c = 1 + 3 * 2;
+bool f = b - a;
