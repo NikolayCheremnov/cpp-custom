@@ -30,6 +30,7 @@ func CreateGlobalDescription(descriptionType int, identifier string, dataType in
 		Current = node
 	}
 	logger.Log("memory_l", "memory allocation for "+identifier+"\n"+TreeToString())
+	logger.Log("tree_l", "created global description '"+identifier+"'\n"+TreeToString())
 	return nil
 }
 

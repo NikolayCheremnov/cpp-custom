@@ -5,6 +5,36 @@ import (
 	"strings"
 )
 
+// PROCEDURES LIST VIEWS
+func (proc *ProcNode) ToString() string {
+	res := "void " + proc.Identifier + "("
+	for paramIndex, paramIdentifier := range proc.ParamsIdentifiers {
+		paramTypeStr := "int"
+		if proc.ParamsTypesLabels[paramIndex] == BoolType {
+			paramTypeStr = "bool"
+		}
+		res += paramTypeStr + " " + paramIdentifier + ", "
+	}
+	if proc.ParamsCount > 0 {
+		res = res[:len(res)-2] + ")"
+	} else {
+		res += ")"
+	}
+	return res
+}
+
+func ProcListToString() string {
+	if ProcRoot == nil {
+		return "nil"
+	}
+	res := ""
+	for next := ProcRoot; next != nil; next = next.Next {
+		res += next.ToString() + "\n"
+	}
+	return res
+}
+
+// TREE VIEWS
 func (node *Node) ToString() string {
 	res := ""
 	if node == Current {

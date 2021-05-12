@@ -1,69 +1,69 @@
 package semanthoid
 
 import (
+	"cpp-custom/logger"
 	"errors"
 )
 
-var ProceduresRoot *Node
-var LastProcedure *Node
+// procedures tree node
+type ProcNode struct {
+	// procedure prototype data
+	Identifier        string
+	ParamsCount       int
+	ParamsTypesLabels []int
+	ParamsIdentifiers []string
+	// procedure position in source file
+	ProcTextPos int
+	ProcLine    int
+	ProcLinePos int
+	// links
+	Next *ProcNode
+}
 
-// returns procedure node and error
-func CreateProcedureDescription(identifier string, paramsCount int, paramsTypes []int, paramsIdentifiers []string, procedureBody *Node) error {
-	redefinition := FindFromNodeAmongLeft(ProceduresRoot, ProcedureDescription, identifier)
-	if redefinition != nil {
-		return errors.New("there is already a procedure '" + identifier + "'")
+var ProcRoot *ProcNode
+var CurrentProc *ProcNode
+
+func AddProcedureDescription(identifier string, paramsCount int, paramsTypesLabels []int, paramsIdentifiers []string,
+	procTextPos int, procLine int, procLinePos int) error {
+	node := &ProcNode{
+		Identifier:        identifier,
+		ParamsCount:       paramsCount,
+		ParamsTypesLabels: paramsTypesLabels,
+		ParamsIdentifiers: paramsIdentifiers,
+		ProcTextPos:       procTextPos,
+		ProcLine:          procLine,
+		ProcLinePos:       procLinePos,
 	}
-	if identifier == "main" && paramsCount > 0 {
-		return errors.New("main must not contain parameters")
-	}
-	// procedure description subtree initialization in insertion
-	node := Node{
-		NodeTypeLabel: ProcedureDescription,
-		Identifier:    identifier,
-		ParamsCount:   paramsCount,
-		ParamsTypes:   paramsTypes,
-	}
-	// set links: between current and procedure and between procedure and composite operator
-	if ProceduresRoot == nil { // if first node in tree
-		ProceduresRoot = &node
-		LastProcedure = &node
-	} else if LastProcedure.Left != nil {
-		return errors.New("fatal error in semantic tree: not empty left branch")
-	} else { // procedures descriptions is only left children or root
-		LastProcedure.Left = &node
-		node.Parent = LastProcedure
-	}
-	if paramsCount > 0 { // if procedure contains parameters
-		for i, param := range paramsIdentifiers {
-			for j, otherParams := range paramsIdentifiers {
-				if i != j && param == otherParams { // param redefinition
-					return errors.New("there is already a formal parameter '" + param + "'")
-				}
-			}
+	if ProcRoot == nil {
+		ProcRoot = node
+		CurrentProc = node
+	} else {
+		redefinition := FindFromRoot(identifier) // check redefinitions
+		if redefinition != nil {
+			return errors.New("the '" + identifier + "' procedure has already been defined")
 		}
-		node.Right = &Node{
-			NodeTypeLabel: Variable,
-			Identifier:    paramsIdentifiers[0],
-			DataTypeLabel: paramsTypes[0],
-			DataValue:     GetDefaultDataValue(),
-			Parent:        &node,
-		}
-		subCurrent := node.Right
-		for i := 1; i < paramsCount; i++ {
-			subCurrent.Left = &Node{
-				NodeTypeLabel: Variable,
-				Identifier:    paramsIdentifiers[i],
-				DataTypeLabel: paramsTypes[i],
-				DataValue:     GetDefaultDataValue(),
-				Parent:        subCurrent,
-			}
-			subCurrent = subCurrent.Left
-		}
-		subCurrent.Left = procedureBody
-		procedureBody.Parent = subCurrent
-	} else { // if immediately the body
-		node.Right = procedureBody
-		procedureBody.Parent = &node
+		CurrentProc.Next = node
+		CurrentProc = node
 	}
+	logger.Log("procedures_tree_l", "create procedure '"+identifier+"' description\n"+ProcListToString())
 	return nil
+}
+
+// find methods
+
+func FindFromRoot(identifier string) *ProcNode {
+	if ProcRoot == nil {
+		return nil
+	}
+	return ProcRoot.Find(identifier)
+}
+
+func (node *ProcNode) Find(identifier string) *ProcNode {
+	if node.Identifier == identifier {
+		return node
+	}
+	if node.Next == nil {
+		return nil
+	}
+	return node.Next.Find(identifier)
 }
