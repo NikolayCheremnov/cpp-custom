@@ -37,7 +37,7 @@ func (S *Scanner) StorePosValues() (int, int, int) {
 func (S *Scanner) RestorePosValues(textPos int, line int, linePos int) {
 	S.textPos = textPos
 	S.line = line
-	S.linePos = line
+	S.linePos = linePos
 }
 
 // getters and setters

@@ -2,6 +2,7 @@ package semanthoid
 
 var Root *Node = nil
 var Current *Node = nil
+var BranchDirection = "left"
 
 var DEBUG_MODE bool = false
 
@@ -47,6 +48,26 @@ type Node struct {
 }
 
 // find procedures and methods
+
+// up from current in nearest right subtree
+func FindDataUpFromCurrentInCurrentRightSubTree(identifier string) *Node {
+	if Root == nil {
+		return nil
+	}
+	return Current.FindDataUpInCurrentRightSubTree(identifier)
+}
+
+func (node *Node) FindDataUpInCurrentRightSubTree(identifier string) *Node {
+	if (node.NodeTypeLabel == Variable || node.NodeTypeLabel == Constant) && node.Identifier == identifier {
+		return node
+	}
+	if node.Parent == nil || node.Parent.Right == node {
+		return nil
+	}
+	return node.Parent.FindDataUpInCurrentRightSubTree(identifier)
+}
+
+// up from current
 func FindDataUpFromCurrent(identifier string) *Node {
 	if Current == nil {
 		return nil
@@ -76,18 +97,4 @@ func FindFromNodeAmongLeft(node *Node, nodeType int, identifier string) *Node {
 		return node
 	}
 	return FindFromNodeAmongLeft(node.Left, nodeType, identifier)
-}
-
-func (node *Node) FindUpInCurrentRightSubTree(nodeType int, identifier string) *Node {
-	if node.Parent == nil || node.Parent.Right == node { // if node is root or root of right subtree
-		if node.NodeTypeLabel == nodeType && node.Identifier == identifier {
-			return node
-		} else {
-			return nil
-		}
-	} else if node.NodeTypeLabel == nodeType && node.Identifier == identifier {
-		return node
-	} else {
-		return node.Parent.FindUpInCurrentRightSubTree(nodeType, identifier)
-	}
 }

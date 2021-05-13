@@ -5,22 +5,33 @@ import (
 	"errors"
 )
 
-func InsertionPoint() string {
-	if Current.NodeTypeLabel == CompositeOperator && Current.Right == nil {
-		return "right"
-	}
-	return "left"
-}
-
-func CreateGlobalDescription(descriptionType int, identifier string, dataType int, value *DataTypeValue) error {
+func checkDescriptionConditions(identifier string, descriptionType int) error {
 	if descriptionType != Variable && descriptionType != Constant {
 		return errors.New("bad description type label")
 	}
-	node := &Node{
+	if FindDataUpFromCurrentInCurrentRightSubTree(identifier) != nil {
+		return errors.New("'" + identifier + "' already declared in this block")
+	}
+	return nil
+}
+
+func createDescriptionNode(descriptionType int, identifier string, dataType int, value *DataTypeValue) (*Node, error) {
+	err := checkDescriptionConditions(identifier, descriptionType)
+	if err != nil {
+		return nil, err
+	}
+	return &Node{
 		NodeTypeLabel: descriptionType,
 		Identifier:    identifier,
 		DataTypeLabel: dataType,
-		DataValue:     value}
+		DataValue:     value}, nil
+}
+
+func CreateGlobalDescription(descriptionType int, identifier string, dataType int, value *DataTypeValue) error {
+	node, err := createDescriptionNode(descriptionType, identifier, dataType, value)
+	if err != nil {
+		return err
+	}
 	if Root == nil { // if first in tree
 		Root = node
 		Current = Root
@@ -29,25 +40,30 @@ func CreateGlobalDescription(descriptionType int, identifier string, dataType in
 		node.Parent = Current
 		Current = node
 	}
-	logger.Log("memory_l", "memory allocation for "+identifier+"\n"+TreeToString())
+	logger.Log("memory_l", "memory allocation for global description '"+identifier+"'")
 	logger.Log("tree_l", "created global description '"+identifier+"'\n"+TreeToString())
 	return nil
 }
 
-func CreateDescription(descriptionType int, identifier string, dataType int, value *DataTypeValue) (*Node, error) {
-	if descriptionType != Variable && descriptionType != Constant {
-		return nil, errors.New("unknown description type")
+func CreateLocalDescription(descriptionType int, identifier string, dataType int, value *DataTypeValue) error {
+	node, err := createDescriptionNode(descriptionType, identifier, dataType, value)
+	if err != nil {
+		return err
 	}
-	if dataType != IntType && dataType != BoolType {
-		return nil, errors.New("unknown data type")
+	if Root == nil {
+		Root = node
+		Current = node
+	} else {
+		if BranchDirection == "right" {
+			Current.Right = node
+			BranchDirection = "left"
+		} else {
+			Current.Left = node
+		}
+		node.Parent = Current
+		Current = node
 	}
-	if value == nil {
-		value = GetDefaultDataValue()
-	}
-	return &Node{
-		NodeTypeLabel: Variable,
-		Identifier:    identifier,
-		DataTypeLabel: dataType,
-		DataValue:     value,
-	}, nil
+	logger.Log("memory_l", "memory allocation for local description '"+identifier+"'")
+	logger.Log("tree_l", "created local description '"+identifier+"'\n"+TreeToString())
+	return nil
 }

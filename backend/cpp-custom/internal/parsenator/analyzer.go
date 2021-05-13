@@ -83,6 +83,10 @@ func (A *Analyzer) isInterpretingGlobalDescription() bool {
 	return A.IFlag&0x1000 != 0
 }
 
+func (A *Analyzer) isInterpretingProcedureExecution() bool {
+	return A.IFlag&0x0100 != 0
+}
+
 func (A *Analyzer) isInterpretingExpression() bool {
 	return A.IFlag&0x1100 != 0
 }
@@ -106,7 +110,17 @@ func (A *Analyzer) GlobalDescriptions() error {
 		if lexType == lexinator.Void { // <описание процедуры>
 			A.scanner.RestorePosValues(textPos, line, linePos)
 			A.setProcedureDescriptionMode()
-			A.procedureDescription()
+			procedureIdentifier := A.procedureDescription()
+			if procedureIdentifier == "main" { // if run program execution
+				mainProc, err := semanthoid.LoadProcedure("main", []*semanthoid.DataTypeValue{}) // loading main procedure
+				if err != nil {
+					A.printPanicError(err.Error())
+				}
+				A.setProcedureExecutionMode()
+				A.scanner.RestorePosValues(mainProc.ProcTextPos, mainProc.ProcLine, mainProc.ProcLinePos)
+				A.procedureDescription() // run main execution
+				break                    // stop parsing
+			}
 		} else if lexType == lexinator.Long ||
 			lexType == lexinator.Short ||
 			lexType == lexinator.Int ||
@@ -449,17 +463,23 @@ func (A *Analyzer) constants() {
 		}
 		value := A.expression()
 		// interpreting
+		// value preparation
+		var dataValue *semanthoid.DataTypeValue
+		switch constsType {
+		case semanthoid.IntType:
+			dataValue = &semanthoid.DataTypeValue{DataAsInt: value, DataAsBool: semanthoid.IntToBool(value)}
+			break
+		case semanthoid.BoolType:
+			dataValue = &semanthoid.DataTypeValue{DataAsInt: semanthoid.IntToBool(value), DataAsBool: semanthoid.IntToBool(value)}
+			break
+		}
 		if A.isInterpretingGlobalDescription() {
-			var dataValue *semanthoid.DataTypeValue
-			switch constsType {
-			case semanthoid.IntType:
-				dataValue = &semanthoid.DataTypeValue{DataAsInt: value, DataAsBool: semanthoid.IntToBool(value)}
-				break
-			case semanthoid.BoolType:
-				dataValue = &semanthoid.DataTypeValue{DataAsInt: semanthoid.IntToBool(value), DataAsBool: semanthoid.IntToBool(value)}
-				break
-			}
 			err := semanthoid.CreateGlobalDescription(semanthoid.Constant, identifier, constsType, dataValue)
+			if err != nil {
+				A.printPanicError(err.Error())
+			}
+		} else if A.isInterpretingProcedureExecution() {
+			err := semanthoid.CreateLocalDescription(semanthoid.Constant, identifier, constsType, dataValue)
 			if err != nil {
 				A.printPanicError(err.Error())
 			}
@@ -480,17 +500,23 @@ func (A *Analyzer) variables() {
 	for isFirst || lexType == lexinator.Comma {
 		isFirst = false
 		identifier, value := A.variable()
+		// value preparation
+		var dataValue *semanthoid.DataTypeValue
+		switch varsType {
+		case semanthoid.IntType:
+			dataValue = &semanthoid.DataTypeValue{DataAsInt: value, DataAsBool: semanthoid.IntToBool(value)}
+			break
+		case semanthoid.BoolType:
+			dataValue = &semanthoid.DataTypeValue{DataAsInt: semanthoid.IntToBool(value), DataAsBool: semanthoid.IntToBool(value)}
+			break
+		}
 		if A.isInterpretingGlobalDescription() {
-			var dataValue *semanthoid.DataTypeValue
-			switch varsType {
-			case semanthoid.IntType:
-				dataValue = &semanthoid.DataTypeValue{DataAsInt: value, DataAsBool: semanthoid.IntToBool(value)}
-				break
-			case semanthoid.BoolType:
-				dataValue = &semanthoid.DataTypeValue{DataAsInt: semanthoid.IntToBool(value), DataAsBool: semanthoid.IntToBool(value)}
-				break
-			}
 			err := semanthoid.CreateGlobalDescription(semanthoid.Variable, identifier, varsType, dataValue)
+			if err != nil {
+				A.printPanicError(err.Error())
+			}
+		} else if A.isInterpretingProcedureExecution() {
+			err := semanthoid.CreateLocalDescription(semanthoid.Variable, identifier, varsType, dataValue)
 			if err != nil {
 				A.printPanicError(err.Error())
 			}
@@ -534,7 +560,8 @@ func (A *Analyzer) operator() *semanthoid.Node {
 }
 
 // <описание процедуры> -> void идентификатор ( U <описание параметров> | e U ) <составной оператор>
-func (A *Analyzer) procedureDescription() {
+// return proc identifier
+func (A *Analyzer) procedureDescription() string {
 	// procedure
 	// procedure node data
 	var procedureIdentifier string
@@ -562,6 +589,9 @@ func (A *Analyzer) procedureDescription() {
 		lexType == lexinator.Short || lexType == lexinator.Bool { // <описание параметров>
 		A.scanner.RestorePosValues(textPos, line, linePos)
 		paramsCount, paramsTypes, paramsIdentifiers = A.parameterDescription()
+		if procedureIdentifier == "main" && paramsCount > 0 {
+			A.printPanicError("'main' must not have input arguments")
+		}
 		lexType, lex = A.scanner.Scan()
 		if lexType != lexinator.ClosingBracket {
 			A.printPanicError("invalid lexeme '" + lex + "', expected ')'")
@@ -575,25 +605,18 @@ func (A *Analyzer) procedureDescription() {
 		if err != nil {
 			A.printPanicError(err.Error())
 		}
-	} else if A.isInterpretingExpression() {
-		// TODO: realization
 	}
-	A.compositeOperator()
+	A.compositeOperator() // setting right direction not required
+	return procedureIdentifier
 }
 
 // <составной оператор> -> { <операторы и описания> }
-// returns composite operator subtree
 func (A *Analyzer) compositeOperator() {
-	CompositeOperator := semanthoid.CreateCompositeOperator()
 	lexType, lex := A.scanner.Scan()
 	if lexType != lexinator.OpeningBrace {
 		A.printPanicError("invalid lexeme '" + lex + "', expected '{'")
 	}
-	subtree := A.operatorsAndDescriptions()
-	if subtree != nil {
-		CompositeOperator.Right = subtree
-		subtree.Parent = CompositeOperator
-	}
+	A.operatorsAndDescriptions()
 	lexType, lex = A.scanner.Scan()
 	if lexType != lexinator.ClosingBrace {
 		A.printPanicError("invalid lexeme '" + lex + "', expected '}'")
@@ -601,29 +624,14 @@ func (A *Analyzer) compositeOperator() {
 }
 
 // <операторы и описания> -> e | <операторы> U e | <операторы и описания>  | <описания> + e | <операторы и описания>
-func (A *Analyzer) operatorsAndDescriptions() *semanthoid.Node {
-	var subtree *semanthoid.Node = nil
-	var leaf *semanthoid.Node = nil
-	addLeaf := func(node *semanthoid.Node) {
-		if node != nil { // if there is something to add
-			if subtree == nil { // if first in block
-				subtree = node
-				leaf = node
-			} else {
-				leaf.Left = node
-				node.Parent = leaf
-				leaf = node
-			}
-		}
-	}
-
+func (A *Analyzer) operatorsAndDescriptions() {
 	for {
 		textPos, line, linePos := A.scanner.StorePosValues()
 		lexType, _ := A.scanner.Scan()
 		A.scanner.RestorePosValues(textPos, line, linePos)
 		if lexType == lexinator.OpeningBrace || lexType == lexinator.For ||
 			lexType == lexinator.Id || lexType == lexinator.Semicolon { // if operator
-			addLeaf(A.operator())
+			A.operator()
 		} else if lexType == lexinator.Long || lexType == lexinator.Short ||
 			lexType == lexinator.Int || lexType == lexinator.Bool || lexType == lexinator.Const { // if description
 			A.description()
@@ -631,8 +639,6 @@ func (A *Analyzer) operatorsAndDescriptions() *semanthoid.Node {
 			break
 		}
 	}
-
-	return subtree
 }
 
 // <описание> -> <переменные>; | <константы>;
