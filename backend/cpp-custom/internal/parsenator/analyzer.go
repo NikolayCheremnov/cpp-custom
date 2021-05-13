@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 )
 
@@ -22,6 +23,19 @@ type Analyzer struct {
 
 // preparing the analyzer
 func Preparing(srsFileName string, scannerErrWriter io.Writer, analyzerErrWriter io.Writer) (Analyzer, error) {
+	// file loggers preparing
+	if os.Getenv("ENABLE_LOGGING") == "true" {
+		loggers := make(map[string]string)
+		loggers["memory_l"] = "memory"
+		loggers["procedures_tree_l"] = "procedures_tree"
+		loggers["tree_l"] = "tree"
+		loggers["stack_l"] = "stack"
+		loggers["debug_l"] = "debug"
+		err := logger.Init(loggers)
+		if err != nil {
+			panic("error logger initializing")
+		}
+	}
 	// syntax analyzer
 	A := Analyzer{writer: analyzerErrWriter, IFlag: 0x0000}
 	// lexical analyzer
@@ -112,7 +126,7 @@ func (A *Analyzer) GlobalDescriptions() error {
 			A.setProcedureDescriptionMode()
 			procedureIdentifier := A.procedureDescription()
 			if procedureIdentifier == "main" { // if run program execution
-				mainProc, err := semanthoid.LoadProcedure("main", []*semanthoid.DataTypeValue{}) // loading main procedure
+				mainProc, err := semanthoid.LoadProcedure("main", []int{}) // loading main procedure
 				if err != nil {
 					A.printPanicError(err.Error())
 				}
@@ -168,8 +182,8 @@ func (A *Analyzer) parameterDescription() (int, []int, []string) {
 
 // <параметры> -> идентификатор | константа U , <параметры> | e
 // return params count
-func (A *Analyzer) parameters() int {
-	var paramsCount int = 0
+func (A *Analyzer) parameters() []int {
+	var paramsValues []int
 	isFirst := true
 	var textPos, line, linePos int
 	var lexType int
@@ -180,12 +194,29 @@ func (A *Analyzer) parameters() int {
 		if lexType != lexinator.Id && lexType != lexinator.IntConst {
 			A.printPanicError("'" + lex + "' is not an identifier or constant")
 		}
-		paramsCount++
+		if A.isInterpretingProcedureExecution() {
+			var value int
+			var err error
+			if lexType == lexinator.IntConst {
+				value, err = strconv.Atoi(lex)
+				if err != nil {
+					A.printPanicError("bad integer constant '" + lex + "'")
+				}
+			} else { // identifier
+				dataNode := semanthoid.FindDataUpFromCurrent(lex)
+				if dataNode == nil {
+					A.printPanicError("'" + lex + "' undefined")
+				} else {
+					value = dataNode.DataValue.DataAsInt
+				}
+			}
+			paramsValues = append(paramsValues, value)
+		}
 		textPos, line, linePos = A.scanner.StorePosValues()
 		lexType, lex = A.scanner.Scan()
 	}
 	A.scanner.RestorePosValues(textPos, line, linePos)
-	return paramsCount
+	return paramsValues
 }
 
 // <эл.выр.> -> (<выражение>) | идентификатор | константа
@@ -246,12 +277,16 @@ func (A *Analyzer) multiplier() int {
 }
 
 // <процедура> -> идентификатор ( ) | идентификатор ( <параметры> )
-func (A *Analyzer) procedure() {
+// return procedure id, paramsCount and paramsValues
+func (A *Analyzer) procedure() (string, []int) {
+	var procIdentifier string
+	var paramsValues []int
+
 	lexType, lex := A.scanner.Scan()
 	if lexType != lexinator.Id {
 		A.printPanicError("'" + lex + "' is not an identifier")
 	}
-	paramsCount := 0
+	procIdentifier = lex
 	lexType, lex = A.scanner.Scan()
 	if lexType != lexinator.OpeningBracket {
 		A.printPanicError("invalid lexeme '" + lex + "', expected '('")
@@ -260,15 +295,13 @@ func (A *Analyzer) procedure() {
 	lexType, lex = A.scanner.Scan()
 	if lexType != lexinator.ClosingBracket {
 		A.scanner.RestorePosValues(textPos, line, linePos)
-		paramsCount = A.parameters()
+		paramsValues = A.parameters()
 		lexType, lex = A.scanner.Scan()
 		if lexType != lexinator.ClosingBracket {
 			A.printPanicError("invalid lexeme '" + lex + "', expected ')'")
 		}
 	}
-	if paramsCount != -1 {
-		A.printPanicError("foo")
-	}
+	return procIdentifier, paramsValues
 }
 
 // <слагаемое> -> <множитель> U +- | e
@@ -406,7 +439,7 @@ func (A *Analyzer) variable() (string, int) {
 }
 
 // <for> -> for ( <оператор for> ; U <выражение> | e U ; U <присваивание> | e U ) <оператор>
-func (A *Analyzer) _for() *semanthoid.Node {
+func (A *Analyzer) _for() {
 	lexType, lex := A.scanner.Scan()
 	if lexType != lexinator.For {
 		A.printPanicError("invalid lexeme '" + lex + "', expected 'for'")
@@ -415,7 +448,7 @@ func (A *Analyzer) _for() *semanthoid.Node {
 	if lexType != lexinator.OpeningBracket {
 		A.printPanicError("invalid lexeme '" + lex + "', expected '('")
 	}
-	counterType, counterIdentifier, counterValue := A.forOperator()
+	A.forOperator()
 	lexType, lex = A.scanner.Scan()
 	if lexType != lexinator.Semicolon {
 		A.printPanicError("invalid lexeme '" + lex + "', expected ';'")
@@ -440,8 +473,7 @@ func (A *Analyzer) _for() *semanthoid.Node {
 			A.printPanicError("invalid lexeme '" + lex + "', expected ';'")
 		}
 	}
-	forBody := A.operator()
-	return semanthoid.CreateForOperator(counterType, counterIdentifier, counterValue, forBody)
+	A.operator()
 }
 
 // <константы>
@@ -517,8 +549,9 @@ func (A *Analyzer) variables() {
 }
 
 // <оператор> -> <составной оператор> | <for> | <процедура> ; | <присваивание>; | ;
-func (A *Analyzer) operator() *semanthoid.Node {
-	var operatorSubtree *semanthoid.Node = nil
+// returns isReturn
+func (A *Analyzer) operator() bool {
+	isReturn := false
 	textPos, line, linePos := A.scanner.StorePosValues()
 	lexType, lex := A.scanner.Scan()
 	if lexType == lexinator.OpeningBrace { // составной оператор
@@ -526,15 +559,50 @@ func (A *Analyzer) operator() *semanthoid.Node {
 		A.compositeOperator(true) // with fork creating
 	} else if lexType == lexinator.For { // for
 		A.scanner.RestorePosValues(textPos, line, linePos)
-		operatorSubtree = A._for()
+		A._for()
 	} else if lexType == lexinator.Id || lexType == lexinator.Return { // процедура или присваивание
-		if lexType == lexinator.Return {
-
-		} else {
+		if lexType == lexinator.Return && A.isInterpretingProcedureExecution() {
+			return true // terminate procedure and return terminate flag
+		} else if lexType == lexinator.Id {
 			lexType, lex = A.scanner.Scan()
 			if lexType == lexinator.OpeningBracket { // процедура
 				A.scanner.RestorePosValues(textPos, line, linePos)
-				A.procedure()
+				procIdentifier, paramsValues := A.procedure()
+				if A.isInterpretingProcedureExecution() { // need run proc
+					// steps:
+					// 0. save scanner position
+					// 1. save current procedure context
+					// 2. load procedure for execution
+					// 3. set scanner position for procedure
+					// 4. run procedureDescription for procedure execution (flag already set)
+					// 5. load procedure context back
+					// 6. set old scanner position
+					logger.Log("debug_l", "\n"+semanthoid.TreeToString())
+					logger.Log("debug_l", semanthoid.Current.ToString())
+					textPos, line, linePos = A.scanner.StorePosValues() // 0
+					err := semanthoid.SaveProcedureContext()            // 1
+					if err != nil {
+						A.printPanicError(err.Error())
+					}
+					logger.Log("debug_l", "\n"+semanthoid.TreeToString())
+					logger.Log("debug_l", semanthoid.Current.ToString())
+					proc, err := semanthoid.LoadProcedure(procIdentifier, paramsValues) // 2
+					if err != nil {
+						A.printPanicError(err.Error())
+					}
+					logger.Log("debug_l", "\n"+semanthoid.TreeToString())
+					logger.Log("debug_l", semanthoid.Current.ToString())
+					A.scanner.RestorePosValues(proc.ProcTextPos, proc.ProcLine, proc.ProcLinePos) // 3
+					A.procedureDescription()                                                      // 4
+					logger.Log("debug_l", semanthoid.Current.ToString())
+					err = semanthoid.LoadProcedureContext() // 5
+					if err != nil {
+						A.printPanicError(err.Error())
+					}
+					logger.Log("debug_l", "\n"+semanthoid.TreeToString())
+					logger.Log("debug_l", semanthoid.Current.ToString())
+					A.scanner.RestorePosValues(textPos, line, linePos) // 6
+				}
 			} else if lexType == lexinator.Assignment { // присваивание
 				A.scanner.RestorePosValues(textPos, line, linePos)
 				A.assigment()
@@ -549,7 +617,7 @@ func (A *Analyzer) operator() *semanthoid.Node {
 	} else if lexType != lexinator.Semicolon {
 		A.printPanicError("invalid lexeme '" + lex + "', expected ';'")
 	}
-	return operatorSubtree
+	return isReturn
 }
 
 // <описание процедуры> -> void идентификатор ( U <описание параметров> | e U ) <составной оператор>
@@ -613,9 +681,9 @@ func (A *Analyzer) compositeOperator(isNeedCreateFork bool) {
 	if lexType != lexinator.OpeningBrace {
 		A.printPanicError("invalid lexeme '" + lex + "', expected '{'")
 	}
-	A.operatorsAndDescriptions()
+	A.operatorsAndDescriptions() // операторы и описания
 	lexType, lex = A.scanner.Scan()
-	if lexType != lexinator.ClosingBrace {
+	if lexType != lexinator.ClosingBrace && !A.isInterpretingProcedureExecution() { // next parsing if procedure not execute now
 		A.printPanicError("invalid lexeme '" + lex + "', expected '}'")
 	}
 
@@ -635,7 +703,9 @@ func (A *Analyzer) operatorsAndDescriptions() {
 		A.scanner.RestorePosValues(textPos, line, linePos)
 		if lexType == lexinator.OpeningBrace || lexType == lexinator.For || lexType == lexinator.Return ||
 			lexType == lexinator.Id || lexType == lexinator.Semicolon { // if operator
-			A.operator()
+			if A.operator() && A.isInterpretingProcedureExecution() {
+				return // terminate execution
+			}
 		} else if lexType == lexinator.Long || lexType == lexinator.Short ||
 			lexType == lexinator.Int || lexType == lexinator.Bool || lexType == lexinator.Const { // if description
 			A.description()

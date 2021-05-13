@@ -5,7 +5,21 @@ import (
 	"strings"
 )
 
+// STACK VIEWS
+func (s *ProcStack) ToString() string {
+	res := ""
+	for i := 0; i < len(*s); i++ {
+		res += (*s)[i].ToString() + " "
+	}
+	return res
+}
+
+func (c *ProcContext) ToString() string {
+	return "[" + c.Proc.Identifier + "]"
+}
+
 // PROCEDURES LIST VIEWS
+
 func (proc *ProcNode) ToString() string {
 	res := "void " + proc.Identifier + "("
 	for paramIndex, paramIdentifier := range proc.ParamsIdentifiers {
@@ -35,6 +49,7 @@ func ProcListToString() string {
 }
 
 // TREE VIEWS
+
 func (node *Node) ToString() string {
 	res := ""
 	if node == Current {

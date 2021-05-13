@@ -5,7 +5,7 @@ import (
 )
 
 func ClearCurrentRightSubTree() error {
-	rightSubTreeRoot := findNearestFork()
+	rightSubTreeRoot := findNearestForkFromCurrent()
 	if rightSubTreeRoot == nil {
 		logger.Log("memory_l", "right subtree was empty, release of memory is not necessary")
 	} else {
