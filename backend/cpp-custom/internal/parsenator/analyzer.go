@@ -523,10 +523,7 @@ func (A *Analyzer) operator() *semanthoid.Node {
 	lexType, lex := A.scanner.Scan()
 	if lexType == lexinator.OpeningBrace { // составной оператор
 		A.scanner.RestorePosValues(textPos, line, linePos)
-		if A.isInterpretingProcedureExecution() {
-			semanthoid.BranchDirection = "right"
-		}
-		A.compositeOperator()
+		A.compositeOperator(true) // with fork creating
 	} else if lexType == lexinator.For { // for
 		A.scanner.RestorePosValues(textPos, line, linePos)
 		operatorSubtree = A._for()
@@ -602,22 +599,27 @@ func (A *Analyzer) procedureDescription() string {
 			A.printPanicError(err.Error())
 		}
 	}
-	A.compositeOperator() // setting right direction not required
+	A.compositeOperator(false) // without fork creating
 	return procedureIdentifier
 }
 
 // <составной оператор> -> { <операторы и описания> }
-func (A *Analyzer) compositeOperator() {
+func (A *Analyzer) compositeOperator(isNeedCreateFork bool) {
+	if A.isInterpretingProcedureExecution() && isNeedCreateFork {
+		semanthoid.CreateFork()
+	}
+
 	lexType, lex := A.scanner.Scan()
 	if lexType != lexinator.OpeningBrace {
 		A.printPanicError("invalid lexeme '" + lex + "', expected '{'")
 	}
-	isNeedClearing := A.operatorsAndDescriptions()
+	A.operatorsAndDescriptions()
 	lexType, lex = A.scanner.Scan()
 	if lexType != lexinator.ClosingBrace {
 		A.printPanicError("invalid lexeme '" + lex + "', expected '}'")
 	}
-	if A.isInterpretingProcedureExecution() && isNeedClearing {
+
+	if A.isInterpretingProcedureExecution() {
 		err := semanthoid.ClearCurrentRightSubTree()
 		if err != nil {
 			A.printPanicError(err.Error())
@@ -626,8 +628,7 @@ func (A *Analyzer) compositeOperator() {
 }
 
 // <операторы и описания> -> e | <операторы> U e | <операторы и описания>  | <описания> + e | <операторы и описания>
-func (A *Analyzer) operatorsAndDescriptions() bool {
-	isNeedClearing := false
+func (A *Analyzer) operatorsAndDescriptions() {
 	for {
 		textPos, line, linePos := A.scanner.StorePosValues()
 		lexType, _ := A.scanner.Scan()
@@ -638,14 +639,10 @@ func (A *Analyzer) operatorsAndDescriptions() bool {
 		} else if lexType == lexinator.Long || lexType == lexinator.Short ||
 			lexType == lexinator.Int || lexType == lexinator.Bool || lexType == lexinator.Const { // if description
 			A.description()
-			if !isNeedClearing && A.isInterpretingProcedureExecution() {
-				isNeedClearing = true
-			}
 		} else { // e
 			break
 		}
 	}
-	return isNeedClearing
 }
 
 // <описание> -> <переменные>; | <константы>;

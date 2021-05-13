@@ -50,19 +50,10 @@ func CreateLocalDescription(descriptionType int, identifier string, dataType int
 	if err != nil {
 		return err
 	}
-	if Root == nil {
-		Root = node
-		Current = node
-	} else {
-		if BranchDirection == "right" {
-			Current.Right = node
-			BranchDirection = "left"
-		} else {
-			Current.Left = node
-		}
-		node.Parent = Current
-		Current = node
-	}
+	Current.Left = node
+	node.Parent = Current
+	Current = node
+
 	logger.Log("memory_l", "memory allocation for local description '"+identifier+"'")
 	logger.Log("tree_l", "created local description '"+identifier+"'\n"+TreeToString())
 	return nil

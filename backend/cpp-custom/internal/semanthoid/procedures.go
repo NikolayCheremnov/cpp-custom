@@ -55,14 +55,16 @@ func AddProcedureDescription(identifier string, paramsCount int, paramsTypesLabe
 // load procedure parameters into tree, set right branch direction for first data in procedure
 // return proc node, error
 func LoadProcedure(identifier string, paramsValues []*DataTypeValue) (*ProcNode, error) {
+	// find proc from proc list
 	proc := FindFromRoot(identifier)
 	if proc == nil {
 		return nil, errors.New("procedure '" + identifier + "' has no definition")
 	}
-	BranchDirection = "right"
+	// create fork for procedure
+	CreateFork()
+	// entering parameters in the tree
 	for paramIndex, paramIdentifier := range proc.ParamsIdentifiers {
 		LoadProcedureParameter(paramIdentifier, proc.ParamsTypesLabels[paramIndex], paramsValues[paramIndex])
-		BranchDirection = "left"
 	}
 	logger.Log("tree_l", "'"+identifier+"' context is loaded into tree\n"+TreeToString())
 	if proc.ParamsCount > 0 {
@@ -78,18 +80,9 @@ func LoadProcedureParameter(paramIdentifier string, paramType int, paramValue *D
 		DataTypeLabel: paramType,
 		DataValue:     paramValue,
 	}
-	if Root == nil {
-		Root = node
-		Current = node
-	} else {
-		if BranchDirection == "right" {
-			Current.Right = node
-		} else {
-			Current.Left = node
-		}
-		node.Parent = Current
-		Current = node
-	}
+	Current.Left = node
+	node.Parent = Current
+	Current = node
 }
 
 // find methods

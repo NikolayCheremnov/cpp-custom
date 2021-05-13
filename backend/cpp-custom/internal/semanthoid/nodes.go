@@ -2,7 +2,6 @@ package semanthoid
 
 var Root *Node = nil
 var Current *Node = nil
-var BranchDirection = "left"
 
 var DEBUG_MODE bool = false
 
