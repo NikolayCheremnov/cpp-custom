@@ -6,31 +6,6 @@ var BranchDirection = "left"
 
 var DEBUG_MODE bool = false
 
-// data types
-
-type DataTypeValue struct {
-	DataAsInt  int
-	DataAsBool int
-}
-
-func GetDefaultDataValue() *DataTypeValue {
-	return &DataTypeValue{0, 0}
-}
-
-func IntToBool(dataAsInt int) int {
-	if dataAsInt != 0 {
-		return 1
-	}
-	return 0
-}
-
-func GoBoolToInt(value bool) int {
-	if value {
-		return 1
-	}
-	return 0
-}
-
 // nodes tree
 
 type Node struct {
@@ -68,6 +43,26 @@ func (node *Node) FindDataUpInCurrentRightSubTree(identifier string) *Node {
 }
 
 // up from current
+
+// find variable
+func FindVariableUpFromCurrent(identifier string) *Node {
+	if Current == nil {
+		return nil
+	}
+	return Current.FindDataUp(identifier)
+}
+
+func (node *Node) FindVariableUp(identifier string) *Node {
+	if node.NodeTypeLabel == Variable && node.Identifier == identifier {
+		return node
+	}
+	if node.Parent == nil {
+		return nil
+	}
+	return node.Parent.FindVariableUp(identifier)
+}
+
+// find data
 func FindDataUpFromCurrent(identifier string) *Node {
 	if Current == nil {
 		return nil
@@ -83,18 +78,4 @@ func (node *Node) FindDataUp(identifier string) *Node {
 		return nil
 	}
 	return node.Parent.FindDataUp(identifier)
-}
-
-func FindDownLeft(node *Node, nodeType int, identifier string) *Node {
-	if node == nil || (node.NodeTypeLabel == nodeType && node.Identifier == identifier) {
-		return node
-	}
-	return FindDownLeft(node.Left, nodeType, identifier)
-}
-
-func FindFromNodeAmongLeft(node *Node, nodeType int, identifier string) *Node {
-	if node == nil || (node.NodeTypeLabel == nodeType && node.Identifier == identifier) {
-		return node
-	}
-	return FindFromNodeAmongLeft(node.Left, nodeType, identifier)
 }

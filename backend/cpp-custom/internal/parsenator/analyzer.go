@@ -31,7 +31,7 @@ func Preparing(srsFileName string, scannerErrWriter io.Writer, analyzerErrWriter
 	}
 	A.scanner = scanner
 	// symantic tree
-	if semanthoid.Root != nil {
+	if true {
 		// TODO: add saving parse tree and proper node preparing
 		semanthoid.Root = nil
 		semanthoid.Current = nil
@@ -367,19 +367,24 @@ func (A *Analyzer) forOperator() (int, string, *semanthoid.DataTypeValue) {
 }
 
 // <присваивание> -> идентификатор = <выражение>
-// returns identifier and expression value
-func (A *Analyzer) assigment() (identifier string, value *semanthoid.DataTypeValue) {
+func (A *Analyzer) assigment() {
 	lexType, lex := A.scanner.Scan()
 	if lexType != lexinator.Id {
 		A.printPanicError("'" + lex + "' is not an identifier")
 	}
-	identifier = lex
+	identifier := lex
 	lexType, lex = A.scanner.Scan()
 	if lexType != lexinator.Assignment {
 		A.printPanicError("invalid lexeme '" + lex + "', expected '='")
 	}
-	//value = A.expression()
-	return identifier, value
+	value := A.expression()
+	if A.isInterpretingProcedureExecution() {
+		variable := semanthoid.FindVariableUpFromCurrent(identifier)
+		if variable == nil {
+			A.printPanicError("undefined variable '" + identifier + "'")
+		}
+		variable.DataValue = semanthoid.ConvertToDataTypeValue(variable.DataTypeLabel, value)
+	}
 }
 
 // <переменная> -> идентификатор U e | = <выражение>
@@ -464,15 +469,7 @@ func (A *Analyzer) constants() {
 		value := A.expression()
 		// interpreting
 		// value preparation
-		var dataValue *semanthoid.DataTypeValue
-		switch constsType {
-		case semanthoid.IntType:
-			dataValue = &semanthoid.DataTypeValue{DataAsInt: value, DataAsBool: semanthoid.IntToBool(value)}
-			break
-		case semanthoid.BoolType:
-			dataValue = &semanthoid.DataTypeValue{DataAsInt: semanthoid.IntToBool(value), DataAsBool: semanthoid.IntToBool(value)}
-			break
-		}
+		dataValue := semanthoid.ConvertToDataTypeValue(constsType, value)
 		if A.isInterpretingGlobalDescription() {
 			err := semanthoid.CreateGlobalDescription(semanthoid.Constant, identifier, constsType, dataValue)
 			if err != nil {
@@ -501,15 +498,7 @@ func (A *Analyzer) variables() {
 		isFirst = false
 		identifier, value := A.variable()
 		// value preparation
-		var dataValue *semanthoid.DataTypeValue
-		switch varsType {
-		case semanthoid.IntType:
-			dataValue = &semanthoid.DataTypeValue{DataAsInt: value, DataAsBool: semanthoid.IntToBool(value)}
-			break
-		case semanthoid.BoolType:
-			dataValue = &semanthoid.DataTypeValue{DataAsInt: semanthoid.IntToBool(value), DataAsBool: semanthoid.IntToBool(value)}
-			break
-		}
+		dataValue := semanthoid.ConvertToDataTypeValue(varsType, value)
 		if A.isInterpretingGlobalDescription() {
 			err := semanthoid.CreateGlobalDescription(semanthoid.Variable, identifier, varsType, dataValue)
 			if err != nil {
@@ -534,6 +523,9 @@ func (A *Analyzer) operator() *semanthoid.Node {
 	lexType, lex := A.scanner.Scan()
 	if lexType == lexinator.OpeningBrace { // составной оператор
 		A.scanner.RestorePosValues(textPos, line, linePos)
+		if A.isInterpretingProcedureExecution() {
+			semanthoid.BranchDirection = "right"
+		}
 		A.compositeOperator()
 	} else if lexType == lexinator.For { // for
 		A.scanner.RestorePosValues(textPos, line, linePos)
@@ -616,12 +608,12 @@ func (A *Analyzer) compositeOperator() {
 	if lexType != lexinator.OpeningBrace {
 		A.printPanicError("invalid lexeme '" + lex + "', expected '{'")
 	}
-	A.operatorsAndDescriptions()
+	isNeedClearing := A.operatorsAndDescriptions()
 	lexType, lex = A.scanner.Scan()
 	if lexType != lexinator.ClosingBrace {
 		A.printPanicError("invalid lexeme '" + lex + "', expected '}'")
 	}
-	if A.isInterpretingProcedureExecution() {
+	if A.isInterpretingProcedureExecution() && isNeedClearing {
 		err := semanthoid.ClearCurrentRightSubTree()
 		if err != nil {
 			A.printPanicError(err.Error())
@@ -630,7 +622,8 @@ func (A *Analyzer) compositeOperator() {
 }
 
 // <операторы и описания> -> e | <операторы> U e | <операторы и описания>  | <описания> + e | <операторы и описания>
-func (A *Analyzer) operatorsAndDescriptions() {
+func (A *Analyzer) operatorsAndDescriptions() bool {
+	isNeedClearing := false
 	for {
 		textPos, line, linePos := A.scanner.StorePosValues()
 		lexType, _ := A.scanner.Scan()
@@ -641,10 +634,14 @@ func (A *Analyzer) operatorsAndDescriptions() {
 		} else if lexType == lexinator.Long || lexType == lexinator.Short ||
 			lexType == lexinator.Int || lexType == lexinator.Bool || lexType == lexinator.Const { // if description
 			A.description()
+			if !isNeedClearing && A.isInterpretingProcedureExecution() {
+				isNeedClearing = true
+			}
 		} else { // e
 			break
 		}
 	}
+	return isNeedClearing
 }
 
 // <описание> -> <переменные>; | <константы>;
