@@ -267,6 +267,17 @@ func (S *Scanner) Scan() (lexType int, lex string) {
 			}
 		}
 
+		// !=
+		if S.sourceModule[S.textPos] == '!' {
+			lex = S.sourceModule[S.textPos : S.textPos+1]
+			incPos()
+			if S.sourceModule[S.textPos] == '=' {
+				lex += S.sourceModule[S.textPos : S.textPos+1]
+				incPos()
+				return NotEqu, lex
+			}
+		}
+
 		// module end
 		if S.sourceModule[S.textPos] == '\000' {
 			return End, "null_char"

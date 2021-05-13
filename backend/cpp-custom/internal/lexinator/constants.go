@@ -38,6 +38,7 @@ const Mul = 20
 const Div = 21
 const Mod = 22
 const Equ = 23
+const NotEqu = 233
 const LessEqu = 24
 const MoreEqu = 25
 const Less = 26

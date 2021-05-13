@@ -1,1 +1,1 @@
-error: invalid lexeme 'null_char', expected '}' position: 48 line: 6 line position: 1
+error: there are no syntax level errors position: 78 line: 4 line position: 2

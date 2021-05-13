@@ -343,7 +343,7 @@ func (A *Analyzer) expression() int {
 	lexType, _ = A.scanner.Scan()
 	for lexType == lexinator.Plus || lexType == lexinator.Minus ||
 		lexType == lexinator.Equ || lexType == lexinator.LessEqu || lexType == lexinator.MoreEqu ||
-		lexType == lexinator.Less || lexType == lexinator.More {
+		lexType == lexinator.Less || lexType == lexinator.More || lexType == lexinator.NotEqu {
 		value2 := A.multiplier()
 		switch lexType {
 		case lexinator.Plus:
@@ -366,6 +366,9 @@ func (A *Analyzer) expression() int {
 			break
 		case lexinator.More:
 			value = semanthoid.GoBoolToInt(value > value2)
+			break
+		case lexinator.NotEqu:
+			value = semanthoid.GoBoolToInt(value != value2)
 			break
 		}
 		textPos, line, linePos = A.scanner.StorePosValues()
