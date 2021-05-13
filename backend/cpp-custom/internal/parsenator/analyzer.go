@@ -51,6 +51,7 @@ func Preparing(srsFileName string, scannerErrWriter io.Writer, analyzerErrWriter
 		semanthoid.Current = nil
 		semanthoid.ProcRoot = nil
 		semanthoid.CurrentProc = nil
+		semanthoid.Stack = nil
 	}
 	// ready for parsing
 	A.isPrepared = true
@@ -577,30 +578,21 @@ func (A *Analyzer) operator() bool {
 					// 4. run procedureDescription for procedure execution (flag already set)
 					// 5. load procedure context back
 					// 6. set old scanner position
-					logger.Log("debug_l", "\n"+semanthoid.TreeToString())
-					logger.Log("debug_l", semanthoid.Current.ToString())
 					textPos, line, linePos = A.scanner.StorePosValues() // 0
 					err := semanthoid.SaveProcedureContext()            // 1
 					if err != nil {
 						A.printPanicError(err.Error())
 					}
-					logger.Log("debug_l", "\n"+semanthoid.TreeToString())
-					logger.Log("debug_l", semanthoid.Current.ToString())
 					proc, err := semanthoid.LoadProcedure(procIdentifier, paramsValues) // 2
 					if err != nil {
 						A.printPanicError(err.Error())
 					}
-					logger.Log("debug_l", "\n"+semanthoid.TreeToString())
-					logger.Log("debug_l", semanthoid.Current.ToString())
 					A.scanner.RestorePosValues(proc.ProcTextPos, proc.ProcLine, proc.ProcLinePos) // 3
 					A.procedureDescription()                                                      // 4
-					logger.Log("debug_l", semanthoid.Current.ToString())
-					err = semanthoid.LoadProcedureContext() // 5
+					err = semanthoid.LoadProcedureContext()                                       // 5
 					if err != nil {
 						A.printPanicError(err.Error())
 					}
-					logger.Log("debug_l", "\n"+semanthoid.TreeToString())
-					logger.Log("debug_l", semanthoid.Current.ToString())
 					A.scanner.RestorePosValues(textPos, line, linePos) // 6
 				}
 			} else if lexType == lexinator.Assignment { // присваивание

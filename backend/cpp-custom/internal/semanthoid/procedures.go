@@ -16,8 +16,13 @@ type ProcContext struct {
 
 type ProcStack []*ProcContext
 
+const MaxStackSize = 1000
+
 func (s *ProcStack) PushBack(context *ProcContext) {
 	*s = append(*s, context)
+	if len(*s) > MaxStackSize {
+		panic("stack overflow")
+	}
 }
 
 func (s *ProcStack) PopBack() *ProcContext {
