@@ -140,6 +140,8 @@ func (S *Scanner) Scan() (lexType int, lex string) {
 				return Const, lex
 			case "void":
 				return Void, lex
+			case "return":
+				return Return, lex
 			default:
 				return Id, lex
 			}

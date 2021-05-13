@@ -530,16 +530,20 @@ func (A *Analyzer) operator() *semanthoid.Node {
 	} else if lexType == lexinator.For { // for
 		A.scanner.RestorePosValues(textPos, line, linePos)
 		operatorSubtree = A._for()
-	} else if lexType == lexinator.Id { // процедура или присваивание
-		lexType, lex = A.scanner.Scan()
-		if lexType == lexinator.OpeningBracket { // процедура
-			A.scanner.RestorePosValues(textPos, line, linePos)
-			A.procedure()
-		} else if lexType == lexinator.Assignment { // присваивание
-			A.scanner.RestorePosValues(textPos, line, linePos)
-			A.assigment()
+	} else if lexType == lexinator.Id || lexType == lexinator.Return { // процедура или присваивание
+		if lexType == lexinator.Return {
+
 		} else {
-			A.printPanicError("'" + lex + "' is not an procedure or assigment")
+			lexType, lex = A.scanner.Scan()
+			if lexType == lexinator.OpeningBracket { // процедура
+				A.scanner.RestorePosValues(textPos, line, linePos)
+				A.procedure()
+			} else if lexType == lexinator.Assignment { // присваивание
+				A.scanner.RestorePosValues(textPos, line, linePos)
+				A.assigment()
+			} else {
+				A.printPanicError("'" + lex + "' is not an procedure or assigment")
+			}
 		}
 		lexType, lex = A.scanner.Scan()
 		if lexType != lexinator.Semicolon {
@@ -628,7 +632,7 @@ func (A *Analyzer) operatorsAndDescriptions() bool {
 		textPos, line, linePos := A.scanner.StorePosValues()
 		lexType, _ := A.scanner.Scan()
 		A.scanner.RestorePosValues(textPos, line, linePos)
-		if lexType == lexinator.OpeningBrace || lexType == lexinator.For ||
+		if lexType == lexinator.OpeningBrace || lexType == lexinator.For || lexType == lexinator.Return ||
 			lexType == lexinator.Id || lexType == lexinator.Semicolon { // if operator
 			A.operator()
 		} else if lexType == lexinator.Long || lexType == lexinator.Short ||

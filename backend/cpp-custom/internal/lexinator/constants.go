@@ -21,6 +21,7 @@ const Bool = 8
 const For = 9
 const Const = 10
 const Void = 11
+const Return = 111
 
 // 3) special signs
 const Semicolon = 12
