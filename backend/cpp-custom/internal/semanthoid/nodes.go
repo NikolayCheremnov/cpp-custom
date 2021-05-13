@@ -3,7 +3,7 @@ package semanthoid
 var Root *Node = nil
 var Current *Node = nil
 
-var DEBUG_MODE bool = false
+var DEBUG_MODE = false
 
 // nodes tree
 

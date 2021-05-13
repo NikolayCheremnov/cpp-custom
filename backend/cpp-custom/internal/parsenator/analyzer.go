@@ -376,9 +376,11 @@ func (A *Analyzer) expression() int {
 }
 
 // <оператор for>
-func (A *Analyzer) forOperator() (int, string, *semanthoid.DataTypeValue) {
-	counterType := semanthoid.Error
+func (A *Analyzer) forOperator() {
+	var counterType = semanthoid.Error
 	counterIdentifier := ""
+	var counterValue int
+
 	textPos, line, linePos := A.scanner.StorePosValues()
 	lexType, lex := A.scanner.Scan()
 	if lexType != lexinator.Semicolon { // if not empty
@@ -395,9 +397,25 @@ func (A *Analyzer) forOperator() (int, string, *semanthoid.DataTypeValue) {
 		if lexType != lexinator.Assignment {
 			A.printPanicError("invalid lexeme '" + lex + "', expected '='")
 		}
-		A.expression()
+		counterValue = A.expression()
 	}
-	return counterType, counterIdentifier, semanthoid.GetDefaultDataValue() // TODO: add counter value calculation
+	// init for counter
+	if A.isInterpretingProcedureExecution() {
+		semanthoid.CreateFork()
+		if counterType != semanthoid.Error { // if add for local variable
+			err := semanthoid.CreateLocalDescription(semanthoid.Variable, counterIdentifier, counterType,
+				semanthoid.ConvertToDataTypeValue(counterType, counterValue))
+			if err != nil {
+				A.printPanicError(err.Error())
+			}
+		} else if counterIdentifier != "" {
+			counter := semanthoid.FindVariableUpFromCurrent(counterIdentifier)
+			if counter == nil {
+				A.printPanicError("undefined variable '" + counterIdentifier + "'")
+			}
+			counter.DataValue = semanthoid.ConvertToDataTypeValue(counter.DataTypeLabel, counterValue)
+		}
+	}
 }
 
 // <присваивание> -> идентификатор = <выражение>
@@ -440,7 +458,24 @@ func (A *Analyzer) variable() (string, int) {
 }
 
 // <for> -> for ( <оператор for> ; U <выражение> | e U ; U <присваивание> | e U ) <оператор>
-func (A *Analyzer) _for() {
+// return isReturn
+func (A *Analyzer) _for() bool {
+	// 'for' condition, assigment and operator positions
+	conditionPos := semanthoid.Error
+	conditionLine := semanthoid.Error
+	conditionLinePos := semanthoid.Error
+	assigmentPos := semanthoid.Error
+	assigmentLine := semanthoid.Error
+	assigmentLinePos := semanthoid.Error
+	operatorPos := semanthoid.Error
+	operatorLine := semanthoid.Error
+	operatorLinePos := semanthoid.Error
+	endPos := semanthoid.Error
+	endLine := semanthoid.Error
+	endLinePos := semanthoid.Error
+	execution := false
+
+	// parsing
 	lexType, lex := A.scanner.Scan()
 	if lexType != lexinator.For {
 		A.printPanicError("invalid lexeme '" + lex + "', expected 'for'")
@@ -454,10 +489,15 @@ func (A *Analyzer) _for() {
 	if lexType != lexinator.Semicolon {
 		A.printPanicError("invalid lexeme '" + lex + "', expected ';'")
 	}
+	if A.isInterpretingExpression() {
+		execution = true
+		A.resetIFlag()
+	}
 	textPos, line, linePos := A.scanner.StorePosValues()
 	lexType, lex = A.scanner.Scan()
 	if lexType != lexinator.Semicolon {
 		A.scanner.RestorePosValues(textPos, line, linePos)
+		conditionPos, conditionLine, conditionLinePos = A.scanner.StorePosValues() // save condition pos
 		A.expression()
 		lexType, lex = A.scanner.Scan()
 		if lexType != lexinator.Semicolon {
@@ -468,13 +508,70 @@ func (A *Analyzer) _for() {
 	lexType, lex = A.scanner.Scan()
 	if lexType != lexinator.ClosingBracket {
 		A.scanner.RestorePosValues(textPos, line, linePos)
+		assigmentPos, assigmentLine, assigmentLinePos = A.scanner.StorePosValues() // save assigment pos
 		A.assigment()
 		lexType, lex = A.scanner.Scan()
 		if lexType != lexinator.ClosingBracket {
 			A.printPanicError("invalid lexeme '" + lex + "', expected ';'")
 		}
 	}
+	operatorPos, operatorLine, operatorLinePos = A.scanner.StorePosValues() // save operator pos
 	A.operator()
+	endPos, endLine, endLinePos = A.scanner.StorePosValues() // save position of 'for' end
+
+	// execution
+	if execution {
+		A.setProcedureExecutionMode() // set flag back
+		// check first condition
+		var conditionValue = 1
+		if conditionPos != semanthoid.Error {
+			A.scanner.RestorePosValues(conditionPos, conditionLine, conditionLinePos)
+			conditionValue = A.expression()
+		}
+		// loop
+		for conditionValue != 0 {
+			// loop execution:
+			// 1. create fork for 'for' operator subtree
+			// 2. set operator position and execute operator
+			// 3. remove operator fork
+			// 4. set assigment position and execute assigment
+			// 5. set condition position and calculate condition
+			semanthoid.CreateFork()                                                // 1
+			A.scanner.RestorePosValues(operatorPos, operatorLine, operatorLinePos) // 2
+			if A.operator() {
+				err := semanthoid.ClearCurrentRightSubTree() // clear operator block
+				if err != nil {
+					A.printPanicError(err.Error())
+				}
+				err = semanthoid.ClearCurrentRightSubTree() // clear for block
+				if err != nil {
+					A.printPanicError(err.Error())
+				}
+				return true // terminate process with return
+			}
+			err := semanthoid.ClearCurrentRightSubTree() // 3
+			if err != nil {
+				A.printPanicError(err.Error())
+			}
+			if assigmentPos != semanthoid.Error { // 4, if assigment exists
+				A.scanner.RestorePosValues(assigmentPos, assigmentLine, assigmentLinePos)
+				A.assigment()
+			}
+			if conditionPos != semanthoid.Error { // 5, if condition exists
+				A.scanner.RestorePosValues(conditionPos, conditionLine, conditionLinePos)
+				conditionValue = A.expression()
+			}
+		}
+		// release for memory
+		err := semanthoid.ClearCurrentRightSubTree() // release counter block
+		if err != nil {
+			A.printPanicError(err.Error())
+		}
+		// set for end position
+		A.scanner.RestorePosValues(endPos, endLine, endLinePos)
+	}
+
+	return false
 }
 
 // <константы>
@@ -557,10 +654,10 @@ func (A *Analyzer) operator() bool {
 	lexType, lex := A.scanner.Scan()
 	if lexType == lexinator.OpeningBrace { // составной оператор
 		A.scanner.RestorePosValues(textPos, line, linePos)
-		A.compositeOperator(true) // with fork creating
+		isReturn = A.compositeOperator(true) // with fork creating
 	} else if lexType == lexinator.For { // for
 		A.scanner.RestorePosValues(textPos, line, linePos)
-		A._for()
+		isReturn = A._for()
 	} else if lexType == lexinator.Id || lexType == lexinator.Return { // процедура или присваивание
 		if lexType == lexinator.Return && A.isInterpretingProcedureExecution() {
 			return true // terminate procedure and return terminate flag
@@ -664,7 +761,8 @@ func (A *Analyzer) procedureDescription() string {
 }
 
 // <составной оператор> -> { <операторы и описания> }
-func (A *Analyzer) compositeOperator(isNeedCreateFork bool) {
+// return isReturn
+func (A *Analyzer) compositeOperator(isNeedCreateFork bool) bool {
 	if A.isInterpretingProcedureExecution() && isNeedCreateFork {
 		semanthoid.CreateFork()
 	}
@@ -673,7 +771,7 @@ func (A *Analyzer) compositeOperator(isNeedCreateFork bool) {
 	if lexType != lexinator.OpeningBrace {
 		A.printPanicError("invalid lexeme '" + lex + "', expected '{'")
 	}
-	A.operatorsAndDescriptions() // операторы и описания
+	isReturn := A.operatorsAndDescriptions() // операторы и описания
 	lexType, lex = A.scanner.Scan()
 	if lexType != lexinator.ClosingBrace && !A.isInterpretingProcedureExecution() { // next parsing if procedure not execute now
 		A.printPanicError("invalid lexeme '" + lex + "', expected '}'")
@@ -685,10 +783,12 @@ func (A *Analyzer) compositeOperator(isNeedCreateFork bool) {
 			A.printPanicError(err.Error())
 		}
 	}
+	return isReturn
 }
 
 // <операторы и описания> -> e | <операторы> U e | <операторы и описания>  | <описания> + e | <операторы и описания>
-func (A *Analyzer) operatorsAndDescriptions() {
+// return is return
+func (A *Analyzer) operatorsAndDescriptions() bool {
 	for {
 		textPos, line, linePos := A.scanner.StorePosValues()
 		lexType, _ := A.scanner.Scan()
@@ -696,7 +796,7 @@ func (A *Analyzer) operatorsAndDescriptions() {
 		if lexType == lexinator.OpeningBrace || lexType == lexinator.For || lexType == lexinator.Return ||
 			lexType == lexinator.Id || lexType == lexinator.Semicolon { // if operator
 			if A.operator() && A.isInterpretingProcedureExecution() {
-				return // terminate execution
+				return true // terminate execution with return flag
 			}
 		} else if lexType == lexinator.Long || lexType == lexinator.Short ||
 			lexType == lexinator.Int || lexType == lexinator.Bool || lexType == lexinator.Const { // if description
@@ -705,6 +805,7 @@ func (A *Analyzer) operatorsAndDescriptions() {
 			break
 		}
 	}
+	return false
 }
 
 // <описание> -> <переменные>; | <константы>;
