@@ -621,6 +621,12 @@ func (A *Analyzer) compositeOperator() {
 	if lexType != lexinator.ClosingBrace {
 		A.printPanicError("invalid lexeme '" + lex + "', expected '}'")
 	}
+	if A.isInterpretingProcedureExecution() {
+		err := semanthoid.ClearCurrentRightSubTree()
+		if err != nil {
+			A.printPanicError(err.Error())
+		}
+	}
 }
 
 // <операторы и описания> -> e | <операторы> U e | <операторы и описания>  | <описания> + e | <операторы и описания>
