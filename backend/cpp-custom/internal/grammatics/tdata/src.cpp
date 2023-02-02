@@ -2,7 +2,7 @@
 
 const int a = 2;
 
-void main() {
+main() {
     /*write code here
         ...
     */

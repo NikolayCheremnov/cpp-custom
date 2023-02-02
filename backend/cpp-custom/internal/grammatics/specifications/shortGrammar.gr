@@ -1,0 +1,44 @@
+PROG -> GDS MAIN GDS
+GDS -> PD GDS | D GDS | ; GDS | EPSILON
+MAIN -> main ( ) CO
+PD -> void PD1
+PD1 -> I ( PSD ) CO
+PSD -> T I PSD1 | EPSILON
+PSD1 -> , PSD | EPSILON
+D -> VS ; | CS ;
+VS -> FV VS1
+VS1 -> , V VS1 | EPSILON
+FV -> T I FV1
+FV1 -> = E | EPSILON
+V -> I V1
+V1 -> = E | EPSILON
+CS -> FC CS1
+CS1 -> , C CS1 | EPSILON
+FC -> const T I = E
+C -> I = E
+T -> int | short int | long int | bool
+CO -> { OD }
+OD -> O OD | D OD | EPSILON
+O -> I OI ; | CO | F | return ; | ;
+OI ->  = E | ( PT )
+PT -> PS | EPSILON
+PS -> I PS1 | CL PS1
+PS1 -> , PS | EPSILON
+F -> for ( OF1 ; FE ; FA ) O
+OF1 -> T I = E | I = E | EPSILON
+FE -> E | EPSILON
+FA -> I = E | EPSILON
+I -> FAS S
+S -> AS S | EPSILON
+FAS -> a | b | c | d | e | f | g | h | i | j | k | l | m | n | o | p | q | r | s | t | u | v | w | x | y | z | _
+AS -> a | b | c | d | e | f | g | h | i | j | k | l | m | n | o | p | q | r | s | t | u | v | w | x | y | z | _ | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+E -> + SM E1 | - SM E1 | SM E1
+E1 -> == SM E1 | != SM E1 | <= SM E1 | >= SM E1 | < SM E1 | > SM E1 | EPSILON
+SM -> M SM1
+SM1 -> + M SM1 | - M SM1 | EPSILON
+M -> SE M1
+M1 -> * SE M1 | / SE M1 | % SE M1 | EPSILON
+SE -> I | CL | ( E )
+CL -> DD CL1
+CL1 -> CL | EPSILON
+DD -> 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9

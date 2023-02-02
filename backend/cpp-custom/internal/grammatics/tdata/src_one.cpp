@@ -2,31 +2,31 @@
 
 const int a = 2;
 
-void main() {
+main() {
     /*write code here
         ...
     */
     // assigments
-    int variable = 20;
-    short int variable2 = 30;
-    long int variable3 = 404;
+    int v = 2;
+    short int v = 3;
+    long int v = 4;
     const int c = 1;
     int f = 1;
 
     // proc call
-    proc(variable, variable2);
+    p(v, v);
 
     // expressions
-    variable = c - variable2;
-    variable3 = (variable / variable2) % c - 10;
+    v = c - v;
+    v = (v / v) % c - 1;
     // cycle
-    for(int i = 1; i < 10; i = i + 1) {
+    for(int i = 1; i < 1; i = i + 1) {
         f = f * i;
     }
 }
 
 // procedure
-void proc(int a, int b) {
+void p(int a, int b) {
     int c = a + b;
 }
 

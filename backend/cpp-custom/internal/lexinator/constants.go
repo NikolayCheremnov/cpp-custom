@@ -13,7 +13,7 @@ const IntConst = 2
 const Assignment = 3
 
 // 2) keywords
-const Main = 1
+const Main = 112
 const Int = 5
 const Short = 6
 const Long = 7
