@@ -95,7 +95,7 @@ func ReadLLTableFromExcel(excelPath string, tableSheet string, nonTerminalsCellC
 	// 2. read terminals list
 	var terminalsKeys []string
 	for _, first := range []string{"", "A"} {
-		for second := 'A'; second < 'Z' && terminalsCellCount > 0; second++ {
+		for second := 'A'; second <= 'Z' && terminalsCellCount > 0; second++ {
 			if first == "" && second == 'A' {
 				continue
 			}
@@ -122,31 +122,8 @@ func ReadLLTableFromExcel(excelPath string, tableSheet string, nonTerminalsCellC
 			if err != nil {
 				return nil, err
 			}
-			writeValue := func(nonTerminal string, terminal string, value string) {
-				if terminal == "a-z" {
-					for symb := 'a'; symb <= 'z'; symb++ {
-						llTable[nonTerminal][string(symb)] = value
-					}
-				} else if terminal == "0-9" {
-					for symb := '0'; symb <= '9'; symb++ {
-						llTable[nonTerminal][string(symb)] = value
-					}
-				} else {
-					llTable[nonTerminal][terminal] = value
-				}
-			}
 			if val != "" {
-				if val == "a-z" {
-					for symb := 'a'; symb <= 'z'; symb++ {
-						writeValue(nonTerminal, string(symb), string(symb))
-					}
-				} else if val == "0-9" {
-					for symb := '0'; symb <= '9'; symb++ {
-						writeValue(nonTerminal, string(symb), string(symb))
-					}
-				} else {
-					writeValue(nonTerminal, terminalsList[terminalKeyIndex], val)
-				}
+				llTable[nonTerminal][terminalsList[terminalKeyIndex]] = val
 			}
 		}
 	}
@@ -156,19 +133,7 @@ func ReadLLTableFromExcel(excelPath string, tableSheet string, nonTerminalsCellC
 	// 4.1. add non terminals
 	llTableStruct.NonTerminals = nonTerminalsList
 	// 4.2 add terminals
-	for _, terminal := range terminalsList {
-		if terminal == "a-z" {
-			for symb := 'a'; symb <= 'z'; symb++ {
-				llTableStruct.Terminals = append(llTableStruct.Terminals, string(symb))
-			}
-		} else if terminal == "0-9" {
-			for symb := '0'; symb <= '9'; symb++ {
-				llTableStruct.Terminals = append(llTableStruct.Terminals, string(symb))
-			}
-		} else {
-			llTableStruct.Terminals = append(llTableStruct.Terminals, terminal)
-		}
-	}
+	llTableStruct.Terminals = terminalsList
 	// 4.3 add table
 	llTableStruct.Table = llTable
 

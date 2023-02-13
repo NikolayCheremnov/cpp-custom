@@ -13,8 +13,8 @@ import (
 const (
 	LlTableExcelPath      = "./specifications/LL_table.xlsx"
 	LlTableExcelSheet     = "Sheet1"
-	NonTerminalsCellCount = 44
-	TerminalsCellCount    = 31
+	NonTerminalsCellCount = 36
+	TerminalsCellCount    = 29
 	LogDir                = "./tdata/logs/"
 )
 
@@ -35,7 +35,6 @@ type LlChecker struct {
 func CreateLlChecker(srcFileName string, scannerErrWriter io.Writer, llCheckerErrWriter io.Writer) (*LlChecker, error) {
 	// file loggers preparing
 	loggers := make(map[string]string)
-	// TODO: add loggers
 	loggers[StackL] = "stack"
 	loggers[RuleL] = "rule"
 	err := logger.InitWithCustomLogDir(loggers, LogDir)
@@ -108,43 +107,31 @@ func (c *LlChecker) MakeLkAnalyze() {
 	// 2. parse input
 
 	// this need to scan identifiers and constants literals
-	var tokenLex string = ""
-	var tokenLexType int = -1
-	scanDecorator := func() (int, string) {
-		if len(tokenLex) != 0 {
-			// parse token
-			next := tokenLex[0:1]
-			tokenLex = tokenLex[1:len(tokenLex)]
-			return tokenLexType, next
-		} else {
-			lexType, lex := c.scanner.Scan()
-			if lexType == lexinator.Id || lexType == lexinator.IntConst {
-				tokenLex = lex
-				tokenLexType = lexType
-				// parse first token
-				next := tokenLex[0:1]
-				tokenLex = tokenLex[1:len(tokenLex)]
-				return tokenLexType, next
-			} else {
-				return lexType, lex
-			}
+	scanDecorator := func() (int, string, string) {
+		lexType, lex := c.scanner.Scan()
+		syntaxLex := lex
+		if lexType == lexinator.Id || lexType == lexinator.Main {
+			syntaxLex = "IDENTITY"
+		} else if lexType == lexinator.IntConst {
+			syntaxLex = "CONSTANT"
 		}
+		return lexType, lex, syntaxLex
 	}
 
-	lexType, lex := scanDecorator()
+	lexType, lex, sLex := scanDecorator()
 	for lexType != lexinator.End {
 		if c.isTerminalOnStackTop() { // terminal on top
-			if c.watchStack() == lex {
+			if c.watchStack() == sLex {
 				// same terminals on top and on input
 				c.extractFromStack()
-				lexType, lex = scanDecorator()
+				lexType, lex, sLex = scanDecorator()
 			} else {
 				c.printPanicError("expected symbol '" + c.watchStack() + "'")
 			}
 		} else { // not terminal on top
 			// find terminal
 			nonTerminalOnTop := c.watchStack()
-			reversedRule, isFound := c.llTable.Table[nonTerminalOnTop][lex]
+			reversedRule, isFound := c.llTable.Table[nonTerminalOnTop][sLex]
 			if isFound && reversedRule != "EPSILON" {
 				// rule is found in ll table then apply this rule
 				logger.Log(RuleL, "apply reversed rule "+reversedRule+" from "+nonTerminalOnTop)
@@ -154,7 +141,7 @@ func (c *LlChecker) MakeLkAnalyze() {
 					c.pushToStack(rulePart)
 				}
 			} else if reversedRule == "EPSILON" || c.llTable.IsEpsilonRuleExists(nonTerminalOnTop) {
-				logger.Log(RuleL, "exists EPSILON rule for "+nonTerminalOnTop+" and input "+lex)
+				logger.Log(RuleL, "exists EPSILON rule for "+nonTerminalOnTop+" and input "+lex+" (syntax lex "+sLex+")")
 				c.extractFromStack() // pop non terminal
 			} else {
 				expected := c.llTable.GetTerminalsListByNonTerminal(nonTerminalOnTop)

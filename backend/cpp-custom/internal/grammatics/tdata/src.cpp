@@ -2,19 +2,19 @@
 
 const int a = 2;
 
-main() {
+void main() {
     /*write code here
         ...
     */
     // assigments
-    int variable = 20;
+    int  = 20;
     short int variable2 = 30;
     long int variable3 = 404;
     const int c = 1;
     int f = 1;
 
     // proc call
-    proc(variable, variable2);
+    proc(variable, variable2)
 
     // expressions
     variable = c - variable2;

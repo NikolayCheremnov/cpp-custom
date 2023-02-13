@@ -6,6 +6,8 @@ import (
 )
 
 func main() {
+	FConvertSourceGrammarText("./specifications/longGrammar.gr", "./specifications/shortGrammar.gr", true)
+
 	// error writers preparation
 	var sw, cw io.Writer
 	_, sw, err := filesystem.Create("./tdata/lexinatorErrors.err")
