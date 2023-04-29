@@ -1,4 +1,4 @@
-package main
+package ll1
 
 import (
 	"cpp-custom/internal/lexinator"
@@ -11,11 +11,10 @@ import (
 )
 
 const (
-	LlTableExcelPath      = "./specifications/LL_table.xlsx"
+	LlTableExcelPath      = "./internal/ll1/specifications/LL_table.xlsx"
 	LlTableExcelSheet     = "Sheet1"
 	NonTerminalsCellCount = 36
 	TerminalsCellCount    = 29
-	LogDir                = "./tdata/logs/"
 )
 
 const (
@@ -37,7 +36,7 @@ func CreateLlChecker(srcFileName string, scannerErrWriter io.Writer, llCheckerEr
 	loggers := make(map[string]string)
 	loggers[StackL] = "stack"
 	loggers[RuleL] = "rule"
-	err := logger.InitWithCustomLogDir(loggers, LogDir)
+	err := logger.Init(loggers)
 	if err != nil {
 		panic("error logger initializing")
 	}

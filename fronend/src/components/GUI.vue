@@ -55,13 +55,16 @@ export default {
       await server.ping().then(res => {
         this.output = res.data.message;
         console.log(this.output);
+      })
+      .catch(() => {
+        alert('Ping is not successfull :c');
       });
     },
     async checkForErrors() {
       await server.checkForErrors(this.input).then(res => {
         this.output = res.data.message;
         this.lexical_errors = res.data.lexical_errors;
-        this.syntax_errors = res.data.syntax_errors;
+        this.syntax_errors = res.data.checker_errors;
       });
     }
   }

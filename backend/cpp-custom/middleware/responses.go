@@ -1,8 +1,14 @@
 package middleware
 
-type analyze_response struct {
-	Message string `json:"message"`
+type CheckerResponse struct {
+	Message         string `json:"message"`
 	LexinatorErrors string `json:"lexical_errors"`
+	CheckerErrors   string `json:"checker_errors"`
+}
+
+type analyze_response struct {
+	Message          string `json:"message"`
+	LexinatorErrors  string `json:"lexical_errors"`
 	ParsenatorErrors string `json:"syntax_errors"`
 }
 

@@ -252,7 +252,6 @@ func (A *Analyzer) simplestExpr() int {
 }
 
 // <множитель> -> <эл.выр.> U e | * U / U % <эл.выр.>
-//
 func (A *Analyzer) multiplier() int {
 	value := A.simplestExpr() // <эл.выр.>
 	textPos, line, linePos := A.scanner.StorePosValues()

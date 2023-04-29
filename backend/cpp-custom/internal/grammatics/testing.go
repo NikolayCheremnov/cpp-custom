@@ -2,10 +2,12 @@ package main
 
 import (
 	"cpp-custom/internal/filesystem"
+	"fmt"
 	"io"
 )
 
 func main() {
+
 	FConvertSourceGrammarText("./specifications/longGrammar.gr", "./specifications/shortGrammar.gr", true)
 
 	// error writers preparation
@@ -27,4 +29,6 @@ func main() {
 
 	// check
 	checker.MakeLkAnalyze()
+	stackTrace := checker.stackToString()
+	fmt.Println(stackTrace)
 }
