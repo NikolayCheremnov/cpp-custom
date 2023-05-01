@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-func FConvertSourceGrammarText(sourcePath string, compressedPath string, isOnCompression bool) {
+func FConvertSourceGrammarText(sourcePath string, compressedPath string, isOnCompression bool, nonTerminalsJsonPath string) {
 	src, dst := "", ""
 	if isOnCompression {
 		src, dst = sourcePath, compressedPath
@@ -20,15 +20,15 @@ func FConvertSourceGrammarText(sourcePath string, compressedPath string, isOnCom
 		panic(err)
 	}
 	grammarText := string(file)
-	compressedText := convertSourceGrammarText(grammarText, isOnCompression)
+	compressedText := convertSourceGrammarText(grammarText, isOnCompression, nonTerminalsJsonPath)
 	err = os.WriteFile(dst, []byte(compressedText), 0644)
 	if err != nil {
 		panic(err)
 	}
 }
 
-func convertSourceGrammarText(grammarText string, isOnCompression bool) string {
-	for longNt, shortNt := range readGrammarMap() {
+func convertSourceGrammarText(grammarText string, isOnCompression bool, nonTerminalsJsonPath string) string {
+	for longNt, shortNt := range readGrammarMap(nonTerminalsJsonPath) {
 		if isOnCompression {
 			grammarText = strings.ReplaceAll(grammarText, longNt, shortNt)
 		} else {
@@ -38,8 +38,8 @@ func convertSourceGrammarText(grammarText string, isOnCompression bool) string {
 	return grammarText
 }
 
-func readGrammarMap() map[string]string {
-	file, err := os.ReadFile("./specifications/non-terminals.json")
+func readGrammarMap(nonTerminalsJsonPath string) map[string]string {
+	file, err := os.ReadFile(nonTerminalsJsonPath)
 	if err != nil {
 		panic(err)
 	}

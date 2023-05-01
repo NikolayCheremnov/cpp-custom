@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+const OPERATIONAL_PREFIX = "#"
+
 type LlTable struct {
 	Table        map[string]map[string]string
 	NonTerminals []string
@@ -58,6 +60,10 @@ func (table *LlTable) IsNonTerminal(sample string) bool {
 		}
 	}
 	return false
+}
+
+func (table *LlTable) IsOperational(sample string) bool {
+	return strings.HasPrefix(sample, OPERATIONAL_PREFIX)
 }
 
 func (table *LlTable) ConsolePrint() {

@@ -2,6 +2,7 @@ package ll1
 
 import (
 	"cpp-custom/internal/lexinator"
+	"cpp-custom/internal/stree"
 	"cpp-custom/logger"
 	"errors"
 	"fmt"
@@ -20,6 +21,7 @@ const (
 const (
 	StackL = "stack_l"
 	RuleL  = "rule_l"
+	TreeL  = "tree_l"
 )
 
 // LlChecker struct with methods
@@ -27,6 +29,8 @@ type LlChecker struct {
 	scanner lexinator.Scanner // use scanner
 	llTable *LlTable          // llTable for checking
 	stack   *stack.Stack
+	//
+	root *stree.Root // root of sym tree
 	// the output stream of error messages
 	writer io.Writer
 }
@@ -36,6 +40,7 @@ func CreateLlChecker(srcFileName string, scannerErrWriter io.Writer, llCheckerEr
 	loggers := make(map[string]string)
 	loggers[StackL] = "stack"
 	loggers[RuleL] = "rule"
+	loggers[TreeL] = "tree"
 	err := logger.Init(loggers)
 	if err != nil {
 		panic("error logger initializing")
@@ -57,6 +62,7 @@ func CreateLlChecker(srcFileName string, scannerErrWriter io.Writer, llCheckerEr
 	checker := new(LlChecker)
 	checker.scanner = scanner
 	checker.llTable = llTable
+	checker.root = stree.NewRoot()
 	checker.writer = llCheckerErrWriter
 	checker.stack = stack.New()
 	return checker, nil
@@ -86,10 +92,6 @@ func (c *LlChecker) pushToStack(value string) {
 	logger.Log(StackL, "pushed: "+value)
 }
 
-func (c *LlChecker) isTerminalOnStackTop() bool {
-	return c.llTable.IsTerminal(c.watchStack())
-}
-
 func (c *LlChecker) extractFromStack() string {
 	logger.Log(StackL, "extracted: "+c.watchStack())
 	return fmt.Sprintf("%v", c.stack.Pop())
@@ -97,6 +99,18 @@ func (c *LlChecker) extractFromStack() string {
 
 func (c *LlChecker) watchStack() string {
 	return fmt.Sprintf("%v", c.stack.Peek())
+}
+
+func (c *LlChecker) isTerminalOnStackTop() bool {
+	return c.llTable.IsTerminal(c.watchStack())
+}
+
+func (c *LlChecker) isNonTerminalOnStackTop() bool {
+	return c.llTable.IsNonTerminal(c.watchStack())
+}
+
+func (c *LlChecker) isOperationalOnStackTop() bool {
+	return c.llTable.IsOperational(c.watchStack())
 }
 
 func (c *LlChecker) stackToString() string {
@@ -117,22 +131,34 @@ func (c *LlChecker) MakeLkAnalyze() {
 	// 1. add first non terminal to stack
 	c.stack.Push(c.llTable.GetFirstNonTerminal())
 
-	// 2. parse input
-
+	// 1.1. prepare context and decorator
+	ctx := &context{0, "", "", ""}
 	// this need to scan identifiers and constants literals
 	scanDecorator := func() (int, string, string) {
 		lexType, lex := c.scanner.Scan()
 		syntaxLex := lex
 		if lexType == lexinator.Id || lexType == lexinator.Main {
 			syntaxLex = "IDENTITY"
+			if err := ctx.saveIdentity(lex); err != nil {
+				c.printPanicError(err.Error())
+			}
 		} else if lexType == lexinator.IntConst {
 			syntaxLex = "CONSTANT"
+		} else if lexType == lexinator.Void ||
+			lexType == lexinator.Short ||
+			lexType == lexinator.Long ||
+			lexType == lexinator.Int ||
+			lexType == lexinator.Bool {
+			if err := ctx.saveType(lex); err != nil {
+				c.printPanicError(err.Error())
+			}
 		}
 		return lexType, lex, syntaxLex
 	}
 
+	// 2. parse input
 	lexType, lex, sLex := scanDecorator()
-	for lexType != lexinator.End {
+	for lexType != lexinator.End || c.isOperationalOnStackTop() {
 		if c.isTerminalOnStackTop() { // terminal on top
 			if c.watchStack() == sLex {
 				// same terminals on top and on input
@@ -141,7 +167,7 @@ func (c *LlChecker) MakeLkAnalyze() {
 			} else {
 				c.printPanicError("expected symbol '" + c.watchStack() + "'")
 			}
-		} else { // not terminal on top
+		} else if c.isNonTerminalOnStackTop() { // not terminal on top
 			// find terminal
 			nonTerminalOnTop := c.watchStack()
 			reversedRule, isFound := c.llTable.Table[nonTerminalOnTop][sLex]
@@ -160,7 +186,18 @@ func (c *LlChecker) MakeLkAnalyze() {
 				expected := c.llTable.GetTerminalsListByNonTerminal(nonTerminalOnTop)
 				c.printPanicError("Bad input '" + lex + "' in '" + nonTerminalOnTop + "', on of " + strings.Join(expected, " ") + " expected")
 			}
+		} else if c.isOperationalOnStackTop() { // operational symbol on stack top
+			operationalSymbol := c.extractFromStack()
+			logger.Info.Println("Operational symbol on stack top: " + operationalSymbol)
+			if err := runOperational(operationalSymbol, c.root, ctx); err != nil {
+				c.printPanicError(err.Error())
+			}
+		} else {
+			c.printPanicError("Bad value on stack top: " + c.watchStack())
 		}
 	}
+
+	logger.Log(StackL, "stack state at the end:\n"+c.stackToString())
+	logger.Log(TreeL, "tree:\n"+c.root.AsString())
 	c.printError("there are no ll-level errors")
 }
