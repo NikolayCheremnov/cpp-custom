@@ -9,29 +9,24 @@ import (
 
 // operational symbols
 const (
-	START_PROC_DECLARATION            = "#spd"
-	PROC_IDENTIFIER                   = "#pi"
-	PROC_ARG_DECLARATION              = "#pad"
-	END_PROC_DECLARATION              = "#epd"
-	START_COMPOSITE_OP                = "#sco"
-	END_COMPOSITE_OP                  = "#eco"
-	START_VARIABLES_DECLARATION       = "#svd"
-	END_VATIABLES_DECLARATION         = "#evd"
-	FIRST_VARIABLE_DECLARATION        = "#fvd"
-	VARIABLE_DECLARATION              = "#vd"
-	START_NAMED_CONSTANTS_DECLARATION = "#sncd"
-	END_NAMED_CONSTANTS_DECLARATION   = "#encd"
-	FIRST_NAMED_CONSTANT_DECLARATION  = "#fncd"
-	NAMED_CONSTANT_DECLARATION        = "#ncd"
-	START_FOR_LOOP                    = "#sfl"
-	END_FOR_LOOP                      = "#efl"
-	FOR_LOOP_COUNTER_DECLARATION      = "#flcd"
+	PROC_IDENTIFIER                  = "#pi"
+	PROC_ARG_DECLARATION             = "#pad"
+	END_PROC_DECLARATION             = "#epd"
+	START_COMPOSITE_OP               = "#sco"
+	END_COMPOSITE_OP                 = "#eco"
+	END_VATIABLES_DECLARATION        = "#evd"
+	FIRST_VARIABLE_DECLARATION       = "#fvd"
+	VARIABLE_DECLARATION             = "#vd"
+	END_NAMED_CONSTANTS_DECLARATION  = "#encd"
+	FIRST_NAMED_CONSTANT_DECLARATION = "#fncd"
+	NAMED_CONSTANT_DECLARATION       = "#ncd"
+	START_FOR_LOOP                   = "#sfl"
+	END_FOR_LOOP                     = "#efl"
+	FOR_LOOP_COUNTER_DECLARATION     = "#flcd"
 )
 
 func runOperational(operational string, root *stree.Root, ctx *context) error {
 	switch operational {
-	case START_PROC_DECLARATION:
-		return spd(ctx)
 	case PROC_IDENTIFIER:
 		return pi(root, ctx)
 	case PROC_ARG_DECLARATION:
@@ -42,16 +37,12 @@ func runOperational(operational string, root *stree.Root, ctx *context) error {
 		return sco(root)
 	case END_COMPOSITE_OP:
 		return eco(root)
-	case START_VARIABLES_DECLARATION:
-		return svd(ctx)
 	case END_VATIABLES_DECLARATION:
 		return evd(ctx)
 	case FIRST_VARIABLE_DECLARATION:
 		return fvd(root, ctx)
 	case VARIABLE_DECLARATION:
 		return vd(root, ctx)
-	case START_NAMED_CONSTANTS_DECLARATION:
-		return sncd(ctx)
 	case END_NAMED_CONSTANTS_DECLARATION:
 		return encd(ctx)
 	case FIRST_NAMED_CONSTANT_DECLARATION:
@@ -67,14 +58,6 @@ func runOperational(operational string, root *stree.Root, ctx *context) error {
 	default:
 		return errors.New("Bad operational symbol received: " + operational)
 	}
-}
-
-// operational handlers
-func spd(ctx *context) error {
-	if err := ctx.setMode(PROCEDURE_DECLARATION_MODE); err != nil {
-		return err
-	}
-	return nil
 }
 
 func pi(root *stree.Root, ctx *context) error {
@@ -151,14 +134,6 @@ func eco(root *stree.Root) error {
 	return comeBackToSubRoot(root, stree.COMPOSITE_OPERATOR)
 }
 
-func svd(ctx *context) error {
-	if err := ctx.setMode(VARIABLE_DECLARATION_MODE); err != nil {
-		return err
-	}
-	ctx.identityLexeme = ""
-	return nil
-}
-
 func evd(ctx *context) error {
 	ctx.release()
 	return nil
@@ -170,13 +145,6 @@ func fvd(root *stree.Root, ctx *context) error {
 
 func vd(root *stree.Root, ctx *context) error {
 	return variableDeclaration(root, ctx, false, true)
-}
-
-func sncd(ctx *context) error {
-	if err := ctx.setMode(CONSTANT_DECLARATION_MODE); err != nil {
-		return err
-	}
-	return nil
 }
 
 func encd(ctx *context) error {

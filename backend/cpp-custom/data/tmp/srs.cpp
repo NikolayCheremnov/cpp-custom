@@ -1,6 +1,14 @@
+// глобальное описание
+
+long int a = 10;
+
+// процедура
 void main() {
-    for (int i = 0; i < 10; i = i + 1) {
-        bool a;
-        short int x;
-    }
+     int x;
+     {
+
+        const int x = 5;
+      }
 }
+
+long int b = 10;

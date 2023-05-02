@@ -127,21 +127,23 @@ func (c *LlChecker) stackToString() string {
 	return builder.String()
 }
 
+func (c *LlChecker) TreeToString() string {
+	return c.root.AsString()
+}
+
 func (c *LlChecker) MakeLkAnalyze() {
 	// 1. add first non terminal to stack
 	c.stack.Push(c.llTable.GetFirstNonTerminal())
 
 	// 1.1. prepare context and decorator
-	ctx := &context{0, "", "", ""}
+	ctx := &context{"", "", ""}
 	// this need to scan identifiers and constants literals
 	scanDecorator := func() (int, string, string) {
 		lexType, lex := c.scanner.Scan()
 		syntaxLex := lex
 		if lexType == lexinator.Id || lexType == lexinator.Main {
 			syntaxLex = "IDENTITY"
-			if err := ctx.saveIdentity(lex); err != nil {
-				c.printPanicError(err.Error())
-			}
+			ctx.saveIdentity(lex)
 		} else if lexType == lexinator.IntConst {
 			syntaxLex = "CONSTANT"
 		} else if lexType == lexinator.Void ||
@@ -149,9 +151,7 @@ func (c *LlChecker) MakeLkAnalyze() {
 			lexType == lexinator.Long ||
 			lexType == lexinator.Int ||
 			lexType == lexinator.Bool {
-			if err := ctx.saveType(lex); err != nil {
-				c.printPanicError(err.Error())
-			}
+			ctx.saveType(lex)
 		}
 		return lexType, lex, syntaxLex
 	}
