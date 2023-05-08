@@ -80,7 +80,7 @@ func ProcessCodeByLl(w http.ResponseWriter, r *http.Request) {
 		if panicMsg := recover(); panicMsg != nil {
 			Message = "panic occurred: " + fmt.Sprint(panicMsg) + " check errors notes"
 		} else {
-			Message = checker.TreeToString()
+			Message = "Tree: \n" + checker.TreeToString() + "\nIL-code:\n" + checker.IntermediateCode()
 			lexinatorErrors = "there are no errors"
 			checkerErrors = "there are no errors"
 		}

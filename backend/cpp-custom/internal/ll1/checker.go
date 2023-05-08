@@ -1,6 +1,7 @@
 package ll1
 
 import (
+	"cpp-custom/internal/il"
 	"cpp-custom/internal/lexinator"
 	"cpp-custom/internal/stree"
 	"cpp-custom/logger"
@@ -19,9 +20,10 @@ const (
 )
 
 const (
-	StackL = "stack_l"
-	RuleL  = "rule_l"
-	TreeL  = "tree_l"
+	StackL      = "stack_l"
+	RuleL       = "rule_l"
+	TreeL       = "tree_l"
+	OperationsL = "operations_l"
 )
 
 // LlChecker struct with methods
@@ -30,7 +32,8 @@ type LlChecker struct {
 	llTable *LlTable          // llTable for checking
 	stack   *stack.Stack
 	//
-	root *stree.Root // root of sym tree
+	root       *stree.Root      // root of sym tree
+	operations *il.Intermediate // operations of triad
 	// the output stream of error messages
 	writer io.Writer
 }
@@ -41,6 +44,7 @@ func CreateLlChecker(srcFileName string, scannerErrWriter io.Writer, llCheckerEr
 	loggers[StackL] = "stack"
 	loggers[RuleL] = "rule"
 	loggers[TreeL] = "tree"
+	loggers[OperationsL] = "operations"
 	err := logger.Init(loggers)
 	if err != nil {
 		panic("error logger initializing")
@@ -63,6 +67,7 @@ func CreateLlChecker(srcFileName string, scannerErrWriter io.Writer, llCheckerEr
 	checker.scanner = scanner
 	checker.llTable = llTable
 	checker.root = stree.NewRoot()
+	checker.operations = il.NewIntermediateDomain(1000) // temporary it will be 1000 operations
 	checker.writer = llCheckerErrWriter
 	checker.stack = stack.New()
 	return checker, nil
@@ -131,12 +136,16 @@ func (c *LlChecker) TreeToString() string {
 	return c.root.AsString()
 }
 
+func (c *LlChecker) IntermediateCode() string {
+	return c.operations.IntermediateAsString()
+}
+
 func (c *LlChecker) MakeLkAnalyze() {
 	// 1. add first non terminal to stack
 	c.stack.Push(c.llTable.GetFirstNonTerminal())
 
 	// 1.1. prepare context and decorator
-	ctx := &context{"", "", ""}
+	ctx := &context{"", "", "", ""}
 	// this need to scan identifiers and constants literals
 	scanDecorator := func() (int, string, string) {
 		lexType, lex := c.scanner.Scan()
@@ -146,6 +155,7 @@ func (c *LlChecker) MakeLkAnalyze() {
 			ctx.saveIdentity(lex)
 		} else if lexType == lexinator.IntConst {
 			syntaxLex = "CONSTANT"
+			ctx.saveConstant(lex)
 		} else if lexType == lexinator.Void ||
 			lexType == lexinator.Short ||
 			lexType == lexinator.Long ||
@@ -189,7 +199,7 @@ func (c *LlChecker) MakeLkAnalyze() {
 		} else if c.isOperationalOnStackTop() { // operational symbol on stack top
 			operationalSymbol := c.extractFromStack()
 			logger.Info.Println("Operational symbol on stack top: " + operationalSymbol)
-			if err := runOperational(operationalSymbol, c.root, ctx); err != nil {
+			if err := runOperational(operationalSymbol, c.root, c.operations, ctx); err != nil {
 				c.printPanicError(err.Error())
 			}
 		} else {
@@ -199,5 +209,6 @@ func (c *LlChecker) MakeLkAnalyze() {
 
 	logger.Log(StackL, "stack state at the end:\n"+c.stackToString())
 	logger.Log(TreeL, "tree:\n"+c.root.AsString())
+	logger.Log(OperationsL, "operations in intermediate:\n"+c.operations.IntermediateAsString())
 	c.printError("there are no ll-level errors")
 }

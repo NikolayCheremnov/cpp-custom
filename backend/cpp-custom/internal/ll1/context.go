@@ -2,8 +2,13 @@ package ll1
 
 type context struct {
 	identityLexeme string
+	constantLexeme string
 	typeLexeme     string
 	typeSubLexeme  string
+}
+
+func (ctx *context) saveConstant(constantLex string) {
+	ctx.constantLexeme = constantLex
 }
 
 func (ctx *context) saveIdentity(identity string) {
@@ -30,4 +35,5 @@ func (ctx *context) release() {
 	ctx.identityLexeme = ""
 	ctx.typeLexeme = ""
 	ctx.typeSubLexeme = ""
+	ctx.constantLexeme = ""
 }

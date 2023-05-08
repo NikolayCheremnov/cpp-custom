@@ -2,9 +2,11 @@ package ll1
 
 import (
 	"cpp-custom/internal/datatype"
+	"cpp-custom/internal/il"
 	"cpp-custom/internal/stree"
 	"cpp-custom/logger"
 	"errors"
+	"strconv"
 )
 
 // operational symbols
@@ -23,14 +25,18 @@ const (
 	START_FOR_LOOP                   = "#sfl"
 	END_FOR_LOOP                     = "#efl"
 	FOR_LOOP_COUNTER_DECLARATION     = "#flcd"
+	START_PROC_CALL                  = "#spc"
+	END_PROC_CALL                    = "#epc"
+	PROC_VARIABLE_ARG_TRANSFER       = "#pvat"
+	PROC_CONSTANT_ARG_TRANSFER       = "#pcat"
 )
 
-func runOperational(operational string, root *stree.Root, ctx *context) error {
+func runOperational(operational string, root *stree.Root, operations *il.Intermediate, ctx *context) error {
 	switch operational {
 	case PROC_IDENTIFIER:
-		return pi(root, ctx)
+		return pi(root, operations, ctx)
 	case PROC_ARG_DECLARATION:
-		return pad(root, ctx)
+		return pad(root, operations, ctx)
 	case END_PROC_DECLARATION:
 		return epd(root)
 	case START_COMPOSITE_OP:
@@ -55,12 +61,20 @@ func runOperational(operational string, root *stree.Root, ctx *context) error {
 		return efl(root)
 	case FOR_LOOP_COUNTER_DECLARATION:
 		return flcd(root, ctx)
+	case START_PROC_CALL:
+		return spc(root, operations, ctx)
+	case PROC_VARIABLE_ARG_TRANSFER:
+		return pvat(root, operations, ctx)
+	case PROC_CONSTANT_ARG_TRANSFER:
+		return pcat(root, operations, ctx)
+	case END_PROC_CALL:
+		return epc(operations)
 	default:
 		return errors.New("Bad operational symbol received: " + operational)
 	}
 }
 
-func pi(root *stree.Root, ctx *context) error {
+func pi(root *stree.Root, operations *il.Intermediate, ctx *context) error {
 	// check redeclaration
 	if root.CurrentNode.FindUpByIdentifier(ctx.identityLexeme) != nil {
 		return errors.New("redeclaration of '" + ctx.identityLexeme + "'")
@@ -76,11 +90,16 @@ func pi(root *stree.Root, ctx *context) error {
 	}
 	root.CurrentNode = root.CurrentNode.Left
 	logger.Log(TreeL, "declare proc '"+ctx.identityLexeme+"'")
+	// add operation declare proc
+	if err := operations.DeclareProcedure(ctx.identityLexeme); err != nil {
+		return err
+	}
+	logger.Log(OperationsL, "declare proc '"+ctx.identityLexeme+"'")
 	ctx.release()
 	return nil
 }
 
-func pad(root *stree.Root, ctx *context) error {
+func pad(root *stree.Root, operations *il.Intermediate, ctx *context) error {
 	if root.CurrentNode.FindUpByIdentifierToNodeType(ctx.identityLexeme, stree.PROCEDURE) != nil {
 		return errors.New("redeclaration of '" + ctx.identityLexeme + "'")
 	}
@@ -101,9 +120,16 @@ func pad(root *stree.Root, ctx *context) error {
 		root.CurrentNode.Left = argNode
 	}
 	root.CurrentNode = argNode
+	//
+	if err := operations.ExtractArgumentFromStack(ctx.identityLexeme); err != nil {
+		return err
+	}
+	//
 	ctx.release()
 	return nil
 }
+
+// operational symbols handlers
 
 func epd(root *stree.Root) error {
 	return comeBackToSubRoot(root, stree.PROCEDURE)
@@ -193,6 +219,136 @@ func flcd(root *stree.Root, ctx *context) error {
 	ctx.identityLexeme = ""
 	ctx.typeSubLexeme = ""
 	ctx.typeLexeme = ""
+	return nil
+}
+
+func spc(root *stree.Root, operations *il.Intermediate, ctx *context) error {
+	// 1. check that procedure existing
+	procNode := root.CurrentNode.FindUpByIdentifier(ctx.identityLexeme)
+	if procNode == nil {
+		return errors.New("procedure '" + ctx.identityLexeme + "' has no declaration")
+	}
+	// 2. add proc calling instruction
+	if err := operations.CallProcedure(procNode.Identifier); err != nil {
+		return err
+	}
+	// 3. go for all args
+	for argNode := procNode.Right; argNode.NodeType != stree.COMPOSITE_OPERATOR; argNode = argNode.Left {
+		// add argument type cast operation (with empty left operand)
+		operations.Operations = append(operations.Operations, il.Operation{
+			IlInstruction: il.CAST,
+			LeftOperand:   nil, // from is nil
+			RightOperand: &il.Operand{
+				Type:         il.TYPE,
+				Identity:     argNode.Variable.Type.FullName,
+				OperandValue: nil,
+			},
+			Result: nil,
+		})
+		// and push arg to stack (with empty left operand)
+		operations.Operations = append(operations.Operations, il.Operation{
+			IlInstruction: il.PUSH,
+			LeftOperand:   nil,
+			RightOperand:  nil,
+			Result:        nil,
+		})
+	}
+	ctx.release()
+	return nil
+}
+
+func pvat(root *stree.Root, operations *il.Intermediate, ctx *context) error {
+	variableNode := root.CurrentNode.FindUpByIdentifier(ctx.identityLexeme)
+	if variableNode == nil || variableNode.NodeType != stree.VARIABLE {
+		return errors.New("identifier '" + ctx.identityLexeme + "' not found")
+	}
+	// find operations for fill left operands
+	lastProcCallOperationIndex := operations.FindLastProcCallOperationIndex()
+	if lastProcCallOperationIndex == -1 {
+		return errors.New("invalid operations structure")
+	}
+	// find last not filled operations
+	lastOperationWithNotFilledLeftOperandIndex := -1
+	for i := lastProcCallOperationIndex + 1; i < len(operations.Operations); i++ {
+		if operations.Operations[i].LeftOperand == nil {
+			lastOperationWithNotFilledLeftOperandIndex = i
+			break
+		}
+	}
+	if lastOperationWithNotFilledLeftOperandIndex == -1 {
+		return errors.New("too many arguments for procedure '" +
+			operations.Operations[lastProcCallOperationIndex].LeftOperand.Identity + "'")
+	}
+	// initialize left operations
+	operations.Operations[lastOperationWithNotFilledLeftOperandIndex].LeftOperand = &il.Operand{
+		Type:         il.TYPE,
+		Identity:     variableNode.Variable.Type.FullName,
+		OperandValue: nil,
+	}
+	operations.Operations[lastOperationWithNotFilledLeftOperandIndex+1].LeftOperand = &il.Operand{
+		Type:         il.VARIABLE,
+		Identity:     variableNode.Identifier,
+		OperandValue: nil,
+	}
+	ctx.release()
+	return nil
+}
+
+func pcat(root *stree.Root, operations *il.Intermediate, ctx *context) error {
+	// find operations for fill left operands
+	lastProcCallOperationIndex := operations.FindLastProcCallOperationIndex()
+	if lastProcCallOperationIndex == -1 {
+		return errors.New("invalid operations structure")
+	}
+	// find last not filled operations
+	lastOperationWithNotFilledLeftOperandIndex := -1
+	for i := lastProcCallOperationIndex + 1; i < len(operations.Operations); i++ {
+		if operations.Operations[i].LeftOperand == nil {
+			lastOperationWithNotFilledLeftOperandIndex = i
+			break
+		}
+	}
+	if lastOperationWithNotFilledLeftOperandIndex == -1 {
+		return errors.New("too many arguments for procedure '" +
+			operations.Operations[lastProcCallOperationIndex].LeftOperand.Identity + "'")
+	}
+	// initialize left operations
+	operations.Operations[lastOperationWithNotFilledLeftOperandIndex].LeftOperand = &il.Operand{
+		Type:         il.TYPE,
+		Identity:     "int", // only int constants
+		OperandValue: nil,
+	}
+	intValue, _ := strconv.Atoi(ctx.constantLexeme)
+	value := datatype.NewIntDataValue(int64(intValue))
+	operations.Operations[lastOperationWithNotFilledLeftOperandIndex+1].LeftOperand = &il.Operand{
+		Type:         il.CONSTANT,
+		Identity:     ctx.constantLexeme,
+		OperandValue: &value,
+	}
+	ctx.release()
+	return nil
+}
+
+func epc(operations *il.Intermediate) error {
+	// find operations for fill left operands
+	lastProcCallOperationIndex := operations.FindLastProcCallOperationIndex()
+	if lastProcCallOperationIndex == -1 {
+		return errors.New("invalid operations structure")
+	}
+	// find last not filled operations
+	lastOperationWithNotFilledLeftOperandIndex := -1
+	for i := lastProcCallOperationIndex + 1; i < len(operations.Operations); i++ {
+		if operations.Operations[i].LeftOperand == nil {
+			lastOperationWithNotFilledLeftOperandIndex = i
+			break
+		}
+	}
+	if lastOperationWithNotFilledLeftOperandIndex != -1 {
+		return errors.New("too few arguments for procedure '" +
+			operations.Operations[lastProcCallOperationIndex].LeftOperand.Identity + "'")
+	}
+	// move lastProcCallOperation to end of operations
+	operations.MoveOperationToEnd(lastProcCallOperationIndex)
 	return nil
 }
 

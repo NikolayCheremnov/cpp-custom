@@ -1,14 +1,14 @@
-// глобальное описание
 
-long int a = 10;
+void bidibo(){}
 
-// процедура
-void main() {
-     int x;
-     {
-
-        const int x = 5;
-      }
+void fun(int a, bool b, short int c) {
+bidibo();
 }
 
-long int b = 10;
+
+void main() {
+    short int x;
+    long int y;
+    fun(x, y, 10);
+
+}

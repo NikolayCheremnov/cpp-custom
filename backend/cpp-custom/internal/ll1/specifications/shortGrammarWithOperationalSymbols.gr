@@ -1,0 +1,36 @@
+PROG -> GD PROG | EPSILON
+GD -> PD | D | ;
+PD -> void PD1 #epd
+PD1 -> IDENTITY #pi ( PSD ) CO
+PSD -> T IDENTITY #pad PSD1 | EPSILON
+PSD1 -> , PSD | EPSILON
+D -> VS #evd ; | CS #encd ;
+VS -> FV VS1
+VS1 -> , V VS1 | EPSILON
+FV -> T IDENTITY #fvd FV1
+FV1 -> = E | EPSILON
+V -> IDENTITY #vd V1
+V1 -> = E | EPSILON
+CS -> FC CS1
+CS1 -> , C CS1 | EPSILON
+FC -> const T IDENTITY #fncd = E
+C -> IDENTITY #ncd = E
+T -> int | short int | long int | bool
+CO -> { #sco OD #eco }
+OD -> O OD | D OD | EPSILON
+O -> IDENTITY OI ; | CO | F | return ; | ;
+OI -> = E | #spc ( PT ) #epc
+PT -> PS | EPSILON
+PS -> IDENTITY #pvat PS1 | CONSTANT #pcat PS1
+PS1 -> , PS | EPSILON
+F -> #sfl for ( OF1 ; FE ; FA ) O #efl
+OF1 -> T IDENTITY #flcd = E | IDENTITY = E | EPSILON
+FE -> E | EPSILON
+FA -> IDENTITY = E | EPSILON
+E -> + SM E1 | - SM E1 | SM E1
+E1 -> == SM E1 | != SM E1 | <= SM E1 | >= SM E1 | < SM E1 | > SM E1 | EPSILON
+SM -> M SM1
+SM1 -> + M SM1 | - M SM1 | EPSILON
+M -> SE M1
+M1 -> * SE M1 | / SE M1 | % SE M1 | EPSILON
+SE -> IDENTITY | CONSTANT | ( E )
