@@ -145,23 +145,50 @@ func (c *LlChecker) MakeLkAnalyze() {
 	c.stack.Push(c.llTable.GetFirstNonTerminal())
 
 	// 1.1. prepare context and decorator
-	ctx := &context{"", "", "", ""}
+	ctx := &context{"", "", "", "", "",
+		false, []string{}, "", "", []il.Operation{}}
 	// this need to scan identifiers and constants literals
 	scanDecorator := func() (int, string, string) {
 		lexType, lex := c.scanner.Scan()
 		syntaxLex := lex
 		if lexType == lexinator.Id || lexType == lexinator.Main {
 			syntaxLex = "IDENTITY"
-			ctx.saveIdentity(lex)
+			if ctx.isExpressionParsing {
+				ctx.expressionTokens = append(ctx.expressionTokens, lex)
+			} else {
+				ctx.saveIdentity(lex)
+			}
 		} else if lexType == lexinator.IntConst {
 			syntaxLex = "CONSTANT"
-			ctx.saveConstant(lex)
+			if ctx.isExpressionParsing {
+				ctx.expressionTokens = append(ctx.expressionTokens, lex)
+			} else {
+				ctx.saveConstant(lex)
+			}
 		} else if lexType == lexinator.Void ||
 			lexType == lexinator.Short ||
 			lexType == lexinator.Long ||
 			lexType == lexinator.Int ||
 			lexType == lexinator.Bool {
 			ctx.saveType(lex)
+		} else if lexType == lexinator.Minus ||
+			lexType == lexinator.Equ ||
+			lexType == lexinator.NotEqu ||
+			lexType == lexinator.LessEqu ||
+			lexType == lexinator.MoreEqu ||
+			lexType == lexinator.Less ||
+			lexType == lexinator.More ||
+			lexType == lexinator.Plus ||
+			lexType == lexinator.Mul ||
+			lexType == lexinator.Div ||
+			lexType == lexinator.Mod ||
+			lexType == lexinator.OpeningBracket ||
+			lexType == lexinator.ClosingBracket {
+			if ctx.isExpressionParsing {
+				ctx.expressionTokens = append(ctx.expressionTokens, lex)
+			} else {
+				ctx.saveOperator(lex)
+			}
 		}
 		return lexType, lex, syntaxLex
 	}

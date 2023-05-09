@@ -8,25 +8,25 @@ D -> VS #evd ; | CS #encd ;
 VS -> FV VS1
 VS1 -> , V VS1 | EPSILON
 FV -> T IDENTITY #fvd FV1
-FV1 -> = E | EPSILON
+FV1 -> = #se E #eewd | EPSILON
 V -> IDENTITY #vd V1
-V1 -> = E | EPSILON
+V1 -> = #se E #eewd | EPSILON
 CS -> FC CS1
 CS1 -> , C CS1 | EPSILON
-FC -> const T IDENTITY #fncd = E
-C -> IDENTITY #ncd = E
+FC -> const T IDENTITY #fncd = #se E #eewd
+C -> IDENTITY #ncd = #se E #eewd
 T -> int | short int | long int | bool
 CO -> { #sco OD #eco }
 OD -> O OD | D OD | EPSILON
 O -> IDENTITY OI ; | CO | F | return ; | ;
-OI -> = E | #spc ( PT ) #epc
+OI -> #sa = #se E #eewa | #spc ( PT ) #epc
 PT -> PS | EPSILON
 PS -> IDENTITY #pvat PS1 | CONSTANT #pcat PS1
 PS1 -> , PS | EPSILON
 F -> #sfl for ( OF1 ; FE ; FA ) O #efl
-OF1 -> T IDENTITY #flcd = E | IDENTITY = E | EPSILON
-FE -> E | EPSILON
-FA -> IDENTITY = E | EPSILON
+OF1 -> T IDENTITY #flcd = #se E #eewdfi | IDENTITY #sa = #se E #eewafi | EPSILON
+FE -> #se E #eewc | EPSILON
+FA -> IDENTITY #sa = #se E #eewaf | EPSILON
 E -> + SM E1 | - SM E1 | SM E1
 E1 -> == SM E1 | != SM E1 | <= SM E1 | >= SM E1 | < SM E1 | > SM E1 | EPSILON
 SM -> M SM1

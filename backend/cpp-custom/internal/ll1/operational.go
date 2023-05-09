@@ -3,10 +3,12 @@ package ll1
 import (
 	"cpp-custom/internal/datatype"
 	"cpp-custom/internal/il"
+	"cpp-custom/internal/polis"
 	"cpp-custom/internal/stree"
 	"cpp-custom/logger"
 	"errors"
 	"strconv"
+	"strings"
 )
 
 // operational symbols
@@ -29,6 +31,15 @@ const (
 	END_PROC_CALL                    = "#epc"
 	PROC_VARIABLE_ARG_TRANSFER       = "#pvat"
 	PROC_CONSTANT_ARG_TRANSFER       = "#pcat"
+	START_EXPRESSION                 = "#se"
+	END_EXPRESSION_WITH_DECLARATION  = "#eewd"
+	// END_EXPRESSION                              = "#ee"
+	START_ASSIGNMENT                            = "#sa"
+	END_EXPRESSION_WITH_ASSIGNMENT              = "#eewa"
+	END_EXPRESSIONT_WITH_ASSUGNMENT_FOR         = "#eewaf"
+	END_EXPRESSION_WITH_CONDITION               = "#eewc"
+	END_EXPRESSION_WITH_ASSIGNMENT_AT_FOR_INIT  = "#eewafi"
+	END_EXPRESSION_WITH_DECLARATION_AT_FOR_INIT = "#eewdfi"
 )
 
 func runOperational(operational string, root *stree.Root, operations *il.Intermediate, ctx *context) error {
@@ -56,9 +67,9 @@ func runOperational(operational string, root *stree.Root, operations *il.Interme
 	case NAMED_CONSTANT_DECLARATION:
 		return ncd(root, ctx)
 	case START_FOR_LOOP:
-		return sfl(root)
+		return sfl(root, operations, ctx)
 	case END_FOR_LOOP:
-		return efl(root)
+		return efl(root, operations, ctx)
 	case FOR_LOOP_COUNTER_DECLARATION:
 		return flcd(root, ctx)
 	case START_PROC_CALL:
@@ -66,12 +77,35 @@ func runOperational(operational string, root *stree.Root, operations *il.Interme
 	case PROC_VARIABLE_ARG_TRANSFER:
 		return pvat(root, operations, ctx)
 	case PROC_CONSTANT_ARG_TRANSFER:
-		return pcat(root, operations, ctx)
+		return pcat(operations, ctx)
 	case END_PROC_CALL:
 		return epc(operations)
+	case START_ASSIGNMENT:
+		return sa(ctx)
+	case START_EXPRESSION:
+		return se(ctx)
+	case END_EXPRESSION_WITH_DECLARATION:
+		return eewd(root, operations, ctx)
+	case END_EXPRESSION_WITH_ASSIGNMENT:
+		return eewa(root, operations, ctx)
+	case END_EXPRESSIONT_WITH_ASSUGNMENT_FOR:
+		return eewaf(root, operations, ctx)
+	case END_EXPRESSION_WITH_CONDITION:
+		return eewc(root, operations, ctx)
+	case END_EXPRESSION_WITH_ASSIGNMENT_AT_FOR_INIT:
+		return eewafi(root, operations, ctx)
+	case END_EXPRESSION_WITH_DECLARATION_AT_FOR_INIT:
+		return eewdfi(root, operations, ctx)
+	//case END_EXPRESSION:
+	//	return ee(root, operations, ctx)
 	default:
 		return errors.New("Bad operational symbol received: " + operational)
 	}
+}
+
+func sa(ctx *context) error {
+	ctx.assigmentTarget = ctx.identityLexeme
+	return nil
 }
 
 func pi(root *stree.Root, operations *il.Intermediate, ctx *context) error {
@@ -186,7 +220,7 @@ func ncd(root *stree.Root, ctx *context) error {
 	return variableDeclaration(root, ctx, false, false)
 }
 
-func sfl(root *stree.Root) error {
+func sfl(root *stree.Root, operations *il.Intermediate, ctx *context) error {
 	root.CurrentNode.Left = &stree.Node{
 		NodeType:   stree.FOR_OPERATOR,
 		Identifier: "",
@@ -196,10 +230,61 @@ func sfl(root *stree.Root) error {
 		Right:      nil,
 	}
 	root.CurrentNode = root.CurrentNode.Left
+	// add pass operation to start cycle
+	operations.Operations = append(operations.Operations, il.Operation{
+		IlInstruction: il.PASS,
+		LeftOperand:   nil,
+		RightOperand:  nil,
+		Result:        nil,
+	})
+	// add deffered jump oeration
+	ctx.deferredOperations = append(ctx.deferredOperations, il.Operation{
+		IlInstruction: il.JMP,
+		LeftOperand: &il.Operand{
+			Type:         il.OPERATION,
+			Identity:     strconv.Itoa(len(operations.Operations) - 1),
+			OperandValue: nil,
+		},
+		RightOperand: nil,
+		Result:       nil,
+	})
 	return nil
 }
 
-func efl(root *stree.Root) error {
+func efl(root *stree.Root, operations *il.Intermediate, ctx *context) error {
+	var deferredCycleOperations []il.Operation
+	i := len(ctx.deferredOperations) - 1
+	for {
+		deferredCycleOperations = append(deferredCycleOperations, ctx.deferredOperations[i])
+		if ctx.deferredOperations[i].IlInstruction == il.JMP {
+			break
+		} else {
+			i--
+		}
+	}
+	ctx.deferredOperations = ctx.deferredOperations[:i] // remove from deferred operations in context
+	moveOperationsToGlobalIlCode(operations, deferredCycleOperations[:len(deferredCycleOperations)-1])
+	jmpOperation := deferredCycleOperations[len(deferredCycleOperations)-1]
+	jmpTarget, _ := strconv.Atoi(jmpOperation.LeftOperand.Identity)
+	operations.Operations = append(operations.Operations, jmpOperation) // last jump without offset
+	// add pass at end of cycle
+	operations.Operations = append(operations.Operations, il.Operation{
+		IlInstruction: il.PASS,
+		LeftOperand:   nil,
+		RightOperand:  nil,
+		Result:        nil,
+	})
+	// find nearest JMPF with empty left operand but to jmpTarget
+	for i := len(operations.Operations) - 1; i > jmpTarget; i-- {
+		if operations.Operations[i].IlInstruction == il.JMPF && operations.Operations[i].LeftOperand == nil {
+			operations.Operations[i].LeftOperand = &il.Operand{
+				Type:         il.OPERATION,
+				Identity:     strconv.Itoa(len(operations.Operations) - 1),
+				OperandValue: nil,
+			}
+		}
+	}
+	// change tree at the end
 	return comeBackToSubRoot(root, stree.FOR_OPERATOR)
 }
 
@@ -248,9 +333,13 @@ func spc(root *stree.Root, operations *il.Intermediate, ctx *context) error {
 		// and push arg to stack (with empty left operand)
 		operations.Operations = append(operations.Operations, il.Operation{
 			IlInstruction: il.PUSH,
-			LeftOperand:   nil,
-			RightOperand:  nil,
-			Result:        nil,
+			LeftOperand: &il.Operand{
+				Type:         il.OPERATION,
+				Identity:     strconv.Itoa(len(operations.Operations) - 2), // - 1 because CALL move to end
+				OperandValue: nil,
+			},
+			RightOperand: nil,
+			Result:       nil,
 		})
 	}
 	ctx.release()
@@ -281,20 +370,20 @@ func pvat(root *stree.Root, operations *il.Intermediate, ctx *context) error {
 	}
 	// initialize left operations
 	operations.Operations[lastOperationWithNotFilledLeftOperandIndex].LeftOperand = &il.Operand{
-		Type:         il.TYPE,
-		Identity:     variableNode.Variable.Type.FullName,
-		OperandValue: nil,
-	}
-	operations.Operations[lastOperationWithNotFilledLeftOperandIndex+1].LeftOperand = &il.Operand{
 		Type:         il.VARIABLE,
 		Identity:     variableNode.Identifier,
 		OperandValue: nil,
 	}
+	//operations.Operations[lastOperationWithNotFilledLeftOperandIndex+1].LeftOperand = &il.Operand{
+	//	Type:         il.VARIABLE,
+	//	Identity:     variableNode.Identifier,
+	//	OperandValue: nil,
+	//}
 	ctx.release()
 	return nil
 }
 
-func pcat(root *stree.Root, operations *il.Intermediate, ctx *context) error {
+func pcat(operations *il.Intermediate, ctx *context) error {
 	// find operations for fill left operands
 	lastProcCallOperationIndex := operations.FindLastProcCallOperationIndex()
 	if lastProcCallOperationIndex == -1 {
@@ -313,18 +402,20 @@ func pcat(root *stree.Root, operations *il.Intermediate, ctx *context) error {
 			operations.Operations[lastProcCallOperationIndex].LeftOperand.Identity + "'")
 	}
 	// initialize left operations
-	operations.Operations[lastOperationWithNotFilledLeftOperandIndex].LeftOperand = &il.Operand{
-		Type:         il.TYPE,
-		Identity:     "int", // only int constants
-		OperandValue: nil,
-	}
 	intValue, _ := strconv.Atoi(ctx.constantLexeme)
 	value := datatype.NewIntDataValue(int64(intValue))
-	operations.Operations[lastOperationWithNotFilledLeftOperandIndex+1].LeftOperand = &il.Operand{
+	operations.Operations[lastOperationWithNotFilledLeftOperandIndex].LeftOperand = &il.Operand{
 		Type:         il.CONSTANT,
 		Identity:     ctx.constantLexeme,
 		OperandValue: &value,
 	}
+	//  intValue, _ := strconv.Atoi(ctx.constantLexeme)
+	//  value := datatype.NewIntDataValue(int64(intValue))
+	//operations.Operations[lastOperationWithNotFilledLeftOperandIndex+1].LeftOperand = &il.Operand{
+	//	Type:         il.CONSTANT,
+	//	Identity:     ctx.constantLexeme,
+	//	OperandValue: &value,
+	//}
 	ctx.release()
 	return nil
 }
@@ -351,6 +442,199 @@ func epc(operations *il.Intermediate) error {
 	operations.MoveOperationToEnd(lastProcCallOperationIndex)
 	return nil
 }
+
+func se(ctx *context) error {
+	ctx.expressionTokens = []string{}
+	ctx.expressionTokens = append(ctx.expressionTokens, ctx.lastWrittenLex)
+	ctx.isExpressionParsing = true
+	return nil
+}
+
+func eewd(root *stree.Root, operations *il.Intermediate, ctx *context) error {
+	return processStorExpressionResult(root.CurrentNode, root, operations, ctx, false)
+}
+
+func eewa(root *stree.Root, operations *il.Intermediate, ctx *context) error {
+	storTarget := root.CurrentNode.FindUpByIdentifier(ctx.assigmentTarget)
+	if storTarget == nil || storTarget.NodeType != stree.VARIABLE || !storTarget.Variable.IsMutable {
+		return errors.New("Not found mutable variable '" + ctx.assigmentTarget + "'")
+	}
+	return processStorExpressionResult(storTarget, root, operations, ctx, false)
+}
+
+func eewaf(root *stree.Root, operations *il.Intermediate, ctx *context) error {
+	storTarget := root.CurrentNode.FindUpByIdentifier(ctx.assigmentTarget)
+	if storTarget == nil || storTarget.NodeType != stree.VARIABLE || !storTarget.Variable.IsMutable {
+		return errors.New("Not found mutable variable '" + ctx.assigmentTarget + "'")
+	}
+	return processStorExpressionResult(storTarget, root, operations, ctx, true)
+}
+
+func eewc(root *stree.Root, operations *il.Intermediate, ctx *context) error {
+	ctx.isExpressionParsing = false
+	logger.Log(OperationsL, "completed expression: "+strings.Join(ctx.expressionTokens, " "))
+	var leftOperand *il.Operand
+	var expressionOperations []il.Operation = nil
+	if len(ctx.expressionTokens) == 1 {
+		// then only one operand in expression
+		var err error
+		leftOperand, err = extractSingleExpressionOperandFromCtx(root, ctx)
+		if err != nil {
+			return err
+		}
+	} else {
+		// else need parse and process expression
+		var err error
+		expressionOperations, err = expressionTokensToOperationsSlice(root, ctx)
+		if err != nil {
+			return err
+		}
+		// need to insert it into il operations
+		moveOperationsToGlobalIlCode(operations, expressionOperations)
+		leftOperand = &il.Operand{
+			Type:         il.OPERATION,
+			Identity:     strconv.Itoa(len(operations.Operations) - 1),
+			OperandValue: nil,
+		}
+	}
+	// add type converting to bool
+	operations.Operations = append(operations.Operations, il.Operation{
+		IlInstruction: il.CAST,
+		LeftOperand:   leftOperand,
+		RightOperand: &il.Operand{
+			Type:         il.TYPE,
+			Identity:     "bool",
+			OperandValue: nil,
+		},
+		Result: nil,
+	})
+	operations.Operations = append(operations.Operations, il.Operation{
+		IlInstruction: il.JMPF,
+		LeftOperand:   nil,
+		RightOperand: &il.Operand{
+			Type:         il.OPERATION,
+			Identity:     strconv.Itoa(len(operations.Operations) - 1),
+			OperandValue: nil,
+		},
+		Result: nil,
+	})
+	return nil
+}
+
+func eewdfi(root *stree.Root, operations *il.Intermediate, ctx *context) error {
+	if err := eewd(root, operations, ctx); err != nil {
+		return err
+	}
+	return upPassInCycleInit(operations, ctx)
+}
+
+func eewafi(root *stree.Root, operations *il.Intermediate, ctx *context) error {
+	if err := eewa(root, operations, ctx); err != nil {
+		return err
+	}
+	return upPassInCycleInit(operations, ctx)
+}
+
+//func ee(root *stree.Root, operations *il.Intermediate, ctx *context) error {
+//	// parse expression
+//	ctx.isExpressionParsing = false
+//	logger.Log(OperationsL, "completed expression: "+strings.Join(ctx.expressionTokens, " "))
+//	tokensWithUnaryMinus := polis.AddUnaryMinus(ctx.expressionTokens)
+//	logger.Log(OperationsL, "completed expression with unary minus: "+strings.Join(tokensWithUnaryMinus, " "))
+//	polisTokens := polis.ConvertToRPN(tokensWithUnaryMinus)
+//	logger.Log(OperationsL, "polis expression: "+strings.Join(polisTokens, " "))
+//	// generate triads for expression
+//	var operationsStack []il.Operation
+//	var operationsOut []il.Operation
+//	// pass by tokens in reversed order
+//	for i := len(polisTokens) - 1; i >= 0; i-- {
+//		token := polisTokens[i]
+//		if polis.IsOperator(token) {
+//			// add new Operation to stack top with empty operands
+//			operationsStack = append(operationsStack, il.Operation{
+//				IlInstruction: il.GetOperatorByLexeme(token),
+//				LeftOperand:   nil,
+//				RightOperand:  nil,
+//				Result:        nil,
+//			})
+//		} else { // else variable or constant
+//			var operand il.Operand
+//			if val, err := strconv.Atoi(token); err == nil {
+//				// then constant
+//				value := datatype.NewIntDataValue(int64(val))
+//				operand = il.Operand{
+//					Type:         il.CONSTANT,
+//					Identity:     token,
+//					OperandValue: &value,
+//				}
+//			} else {
+//				// then variable
+//				// need check in tree
+//				variableNode := root.CurrentNode.FindUpByIdentifier(token)
+//				if variableNode == nil || variableNode.NodeType != stree.VARIABLE {
+//					return errors.New("identifier '" + token + "' not found")
+//				}
+//				operand = il.Operand{
+//					Type:         il.VARIABLE,
+//					Identity:     token,
+//					OperandValue: nil,
+//				}
+//			}
+//			// write operand to up operation (start from right)
+//			if operationsStack[len(operationsStack)-1].RightOperand == nil {
+//				operationsStack[len(operationsStack)-1].RightOperand = &operand
+//			} else if operationsStack[len(operationsStack)-1].LeftOperand == nil {
+//				operationsStack[len(operationsStack)-1].LeftOperand = &operand
+//			} else {
+//				panic("no empty operands places in operation")
+//			}
+//		}
+//		// condense operations
+//		for len(operationsStack) > 0 &&
+//			operationsStack[len(operationsStack)-1].RightOperand != nil &&
+//			operationsStack[len(operationsStack)-1].LeftOperand != nil {
+//			// move full filled operation to out
+//			operationsOut = append(operationsOut, operationsStack[len(operationsStack)-1])
+//			// remove it from stack
+//			operationsStack = operationsStack[:len(operationsStack)-1]
+//			// write full filled operation as operand for another operation
+//			if len(operationsStack) > 0 {
+//				operationAsOperand := il.Operand{
+//					Type:         il.OPERATION,
+//					Identity:     strconv.Itoa(len(operationsOut) - 1),
+//					OperandValue: nil,
+//				}
+//				if operationsStack[len(operationsStack)-1].RightOperand == nil {
+//					operationsStack[len(operationsStack)-1].RightOperand = &operationAsOperand
+//				} else if operationsStack[len(operationsStack)-1].LeftOperand == nil {
+//					operationsStack[len(operationsStack)-1].LeftOperand = &operationAsOperand
+//				} else {
+//					panic("no empty operands places for operation operand in operation")
+//				}
+//			}
+//		}
+//	}
+//	// move operations to global il-code
+//	newStartIndex := len(operations.Operations)
+//	for _, movedOperation := range operationsOut {
+//		if movedOperation.LeftOperand.Type == il.OPERATION {
+//			oldIdentityValue, _ := strconv.Atoi(movedOperation.LeftOperand.Identity)
+//			movedOperation.LeftOperand.Identity = strconv.Itoa(newStartIndex + oldIdentityValue)
+//		}
+//		if movedOperation.RightOperand.Type == il.OPERATION {
+//			oldIdentityValue, _ := strconv.Atoi(movedOperation.RightOperand.Identity)
+//			movedOperation.RightOperand.Identity = strconv.Itoa(newStartIndex + oldIdentityValue)
+//		}
+//		operations.Operations = append(operations.Operations, movedOperation)
+//	}
+//	//// try to view calculated operations
+//	//out := strings.Builder{}
+//	//for i, o := range operationsOut {
+//	//	out.WriteString(strconv.Itoa(i) + ") " + o.OperationAsString() + "\n")
+//	//}
+//	//logger.Log(OperationsL, "operations:\n"+out.String())
+//	return nil
+//}
 
 // common functions
 
@@ -388,5 +672,252 @@ func comeBackToSubRoot(root *stree.Root, nodeType string) error {
 		return errors.New("can`t find " + nodeType + " node")
 	}
 	root.CurrentNode = node
+	return nil
+}
+
+// gen single expression operand
+func extractSingleExpressionOperandFromCtx(root *stree.Root, ctx *context) (*il.Operand, error) {
+	if len(ctx.expressionTokens) != 1 {
+		return nil, errors.New("can`t get single expression operand from tokens, len != 1")
+	}
+	token := ctx.expressionTokens[0]
+	if val, err := strconv.Atoi(token); err == nil {
+		value := datatype.NewIntDataValue(int64(val))
+		// then constant
+		return &il.Operand{
+			Type:         il.CONSTANT,
+			Identity:     token,
+			OperandValue: &value,
+		}, nil
+	} else {
+		// then variable
+		variableNode := root.CurrentNode.FindUpByIdentifier(token)
+		if variableNode == nil || variableNode.NodeType != stree.VARIABLE {
+			return nil, errors.New("identifier '" + token + "' not found")
+		}
+		return &il.Operand{
+			Type:         il.VARIABLE,
+			Identity:     token,
+			OperandValue: nil,
+		}, nil
+	}
+}
+
+// parse expression tokens to operations
+func expressionTokensToOperationsSlice(root *stree.Root, ctx *context) ([]il.Operation,
+	error) {
+	tokensWithUnaryMinus := polis.AddUnaryMinus(ctx.expressionTokens)
+	logger.Log(OperationsL, "completed expression with unary minus: "+strings.Join(tokensWithUnaryMinus, " "))
+	polisTokens := polis.ConvertToRPN(tokensWithUnaryMinus)
+	logger.Log(OperationsL, "polis expression: "+strings.Join(polisTokens, " "))
+	// generate triads for expression
+	var operationsStack []il.Operation
+	var operationsOut []il.Operation
+	// pass by tokens in reversed order
+	for i := len(polisTokens) - 1; i >= 0; i-- {
+		token := polisTokens[i]
+		if polis.IsOperator(token) {
+			// add new Operation to stack top with empty operands
+			operationsStack = append(operationsStack, il.Operation{
+				IlInstruction: il.GetOperatorByLexeme(token),
+				LeftOperand:   nil,
+				RightOperand:  nil,
+				Result:        nil,
+			})
+		} else { // else variable or constant
+			var operand il.Operand
+			if val, err := strconv.Atoi(token); err == nil {
+				// then constant
+				value := datatype.NewIntDataValue(int64(val))
+				operand = il.Operand{
+					Type:         il.CONSTANT,
+					Identity:     token,
+					OperandValue: &value,
+				}
+			} else {
+				// then variable
+				// need check in tree
+				variableNode := root.CurrentNode.FindUpByIdentifier(token)
+				if variableNode == nil || variableNode.NodeType != stree.VARIABLE {
+					return operationsOut, errors.New("identifier '" + token + "' not found")
+				}
+				operand = il.Operand{
+					Type:         il.VARIABLE,
+					Identity:     token,
+					OperandValue: nil,
+				}
+			}
+			// write operand to up operation (start from right)
+			if operationsStack[len(operationsStack)-1].RightOperand == nil {
+				operationsStack[len(operationsStack)-1].RightOperand = &operand
+			} else if operationsStack[len(operationsStack)-1].LeftOperand == nil {
+				operationsStack[len(operationsStack)-1].LeftOperand = &operand
+			} else {
+				panic("no empty operands places in operation")
+			}
+		}
+		// condense operations
+		for len(operationsStack) > 0 &&
+			operationsStack[len(operationsStack)-1].RightOperand != nil &&
+			operationsStack[len(operationsStack)-1].LeftOperand != nil {
+			// move full filled operation to out
+			operationsOut = append(operationsOut, operationsStack[len(operationsStack)-1])
+			// remove it from stack
+			operationsStack = operationsStack[:len(operationsStack)-1]
+			// write full filled operation as operand for another operation
+			if len(operationsStack) > 0 {
+				operationAsOperand := il.Operand{
+					Type:         il.OPERATION,
+					Identity:     strconv.Itoa(len(operationsOut) - 1),
+					OperandValue: nil,
+				}
+				if operationsStack[len(operationsStack)-1].RightOperand == nil {
+					operationsStack[len(operationsStack)-1].RightOperand = &operationAsOperand
+				} else if operationsStack[len(operationsStack)-1].LeftOperand == nil {
+					operationsStack[len(operationsStack)-1].LeftOperand = &operationAsOperand
+				} else {
+					panic("no empty operands places for operation operand in operation")
+				}
+			}
+		}
+	}
+	return operationsOut, nil
+}
+
+func moveOperationsToGlobalIlCode(operations *il.Intermediate, operationsToMove []il.Operation) {
+	newStartIndex := len(operations.Operations)
+	for _, movedOperation := range operationsToMove {
+		if movedOperation.LeftOperand != nil && movedOperation.LeftOperand.Type == il.OPERATION {
+			oldIdentityValue, _ := strconv.Atoi(movedOperation.LeftOperand.Identity)
+			movedOperation.LeftOperand.Identity = strconv.Itoa(newStartIndex + oldIdentityValue)
+		}
+		if movedOperation.RightOperand != nil && movedOperation.RightOperand.Type == il.OPERATION {
+			oldIdentityValue, _ := strconv.Atoi(movedOperation.RightOperand.Identity)
+			movedOperation.RightOperand.Identity = strconv.Itoa(newStartIndex + oldIdentityValue)
+		}
+		operations.Operations = append(operations.Operations, movedOperation)
+	}
+}
+
+func processStorExpressionResult(storTarget *stree.Node, root *stree.Root, operations *il.Intermediate, ctx *context,
+	needMoveToDeferredOperations bool) error {
+	// end parse expression
+	ctx.isExpressionParsing = false
+	logger.Log(OperationsL, "completed expression: "+strings.Join(ctx.expressionTokens, " "))
+	var rightOperand *il.Operand
+	var expressionOperations []il.Operation = nil
+	if len(ctx.expressionTokens) == 1 {
+		// then only one operand in expression
+		var err error
+		rightOperand, err = extractSingleExpressionOperandFromCtx(root, ctx)
+		if err != nil {
+			return err
+		}
+	} else {
+		// else need parse and process expression
+		var err error
+		expressionOperations, err = expressionTokensToOperationsSlice(root, ctx)
+		if err != nil {
+			return err
+		}
+		// need to insert it into il operations
+		var identity string
+		if !needMoveToDeferredOperations {
+			moveOperationsToGlobalIlCode(operations, expressionOperations)
+			identity = strconv.Itoa(len(operations.Operations) - 1)
+		} else {
+			identity = strconv.Itoa(len(expressionOperations) - 1)
+		}
+		rightOperand = &il.Operand{
+			Type:         il.OPERATION,
+			Identity:     identity,
+			OperandValue: nil,
+		}
+	}
+	// then we know right operand of expression and can add operation for stor without mutable checking
+	if storTarget.NodeType != stree.VARIABLE {
+		return errors.New("no variable for initialization in current node")
+	}
+	// add type converting and stor
+	var storRightOperandIdentity string
+	if !needMoveToDeferredOperations {
+		storRightOperandIdentity = strconv.Itoa(len(operations.Operations))
+	} else {
+		storRightOperandIdentity = strconv.Itoa(len(expressionOperations))
+	}
+
+	castOperation := il.Operation{
+		IlInstruction: il.CAST,
+		LeftOperand:   rightOperand, // this is funny moment because rightOperand for stor, but it is left for cast
+		RightOperand: &il.Operand{
+			Type:         il.TYPE,
+			Identity:     storTarget.Variable.Type.FullName,
+			OperandValue: nil,
+		},
+		Result: nil,
+	}
+	storOperation := il.Operation{
+		IlInstruction: il.STOR,
+		LeftOperand: &il.Operand{
+			Type:         il.VARIABLE,
+			Identity:     storTarget.Identifier,
+			OperandValue: nil,
+		},
+		RightOperand: &il.Operand{
+			Type:         il.OPERATION,
+			Identity:     storRightOperandIdentity,
+			OperandValue: nil,
+		},
+		Result: nil,
+	}
+	if !needMoveToDeferredOperations {
+		operations.Operations = append(operations.Operations, castOperation)
+		operations.Operations = append(operations.Operations, storOperation)
+	} else {
+		ctx.deferredOperations = append(ctx.deferredOperations, storOperation)
+		ctx.deferredOperations = append(ctx.deferredOperations, castOperation)
+		// add expression operations to deffered operations stack in reversed order
+		if expressionOperations != nil {
+			for i := len(expressionOperations) - 1; i >= 0; i-- {
+				ctx.deferredOperations = append(ctx.deferredOperations, expressionOperations[i])
+			}
+		}
+	}
+
+	return nil
+}
+
+func upPassInCycleInit(operations *il.Intermediate, ctx *context) error {
+	// find nearest PASS-operator
+	passIndex := -1
+	for i := len(operations.Operations) - 1; i >= 0; i-- {
+		if operations.Operations[i].IlInstruction == il.PASS {
+			passIndex = i
+		}
+	}
+	if passIndex == -1 {
+		return errors.New("no suitable pass operator")
+	}
+	// move it to current end
+	oldPassIndex := passIndex
+	for i := oldPassIndex + 1; i < len(operations.Operations); i++ {
+		if operations.Operations[i].LeftOperand != nil && operations.Operations[i].LeftOperand.Type == il.OPERATION {
+			oldIndex, _ := strconv.Atoi(operations.Operations[i].LeftOperand.Identity)
+			operations.Operations[i].LeftOperand.Identity = strconv.Itoa(oldIndex - 1)
+		}
+		if operations.Operations[i].RightOperand != nil && operations.Operations[i].RightOperand.Type == il.OPERATION {
+			oldIndex, _ := strconv.Atoi(operations.Operations[i].RightOperand.Identity)
+			operations.Operations[i].RightOperand.Identity = strconv.Itoa(oldIndex - 1)
+		}
+	}
+	operations.MoveOperationToEnd(passIndex)
+	newPassIndex := len(operations.Operations) - 1
+	// update jump instruction
+	for i := len(ctx.deferredOperations) - 1; i >= 0; i-- {
+		if ctx.deferredOperations[i].LeftOperand.Identity == strconv.Itoa(oldPassIndex) {
+			ctx.deferredOperations[i].LeftOperand.Identity = strconv.Itoa(newPassIndex)
+			break
+		}
+	}
 	return nil
 }

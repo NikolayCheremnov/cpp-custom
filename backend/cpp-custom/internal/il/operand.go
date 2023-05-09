@@ -6,7 +6,7 @@ import "cpp-custom/internal/datatype"
 const (
 	VARIABLE  = "variable"
 	CONSTANT  = "constant"
-	TRIAD     = "triad"
+	OPERATION = "operation"
 	PROCEDURE = "procedure"
 	TYPE      = "type"
 )
