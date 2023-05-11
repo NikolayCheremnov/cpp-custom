@@ -234,8 +234,18 @@ func (c *LlChecker) MakeLkAnalyze() {
 		}
 	}
 
+	// object code completed
 	logger.Log(StackL, "stack state at the end:\n"+c.stackToString())
 	logger.Log(TreeL, "tree:\n"+c.root.AsString())
 	logger.Log(OperationsL, "operations in intermediate:\n"+c.operations.IntermediateAsString())
+
+	// optimization
+	var err error
+	c.operations.Operations, err = il.MakeIntermediateOptimization(c.operations.Operations)
+	if err != nil {
+		c.printPanicError(err.Error())
+	}
+	logger.Log(OperationsL, "operations in intermediate after optimization:\n"+c.operations.IntermediateAsString())
+
 	c.printError("there are no ll-level errors")
 }

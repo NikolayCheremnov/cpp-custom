@@ -7,9 +7,9 @@ PSD1 -> , PSD | EPSILON
 D -> VS #evd ; | CS #encd ;
 VS -> FV VS1
 VS1 -> , V VS1 | EPSILON
-FV -> T IDENTITY #fvd FV1
+FV -> T IDENTITY #fvd #di FV1
 FV1 -> = #se E #eewd | EPSILON
-V -> IDENTITY #vd V1
+V -> IDENTITY #vd #di V1
 V1 -> = #se E #eewd | EPSILON
 CS -> FC CS1
 CS1 -> , C CS1 | EPSILON

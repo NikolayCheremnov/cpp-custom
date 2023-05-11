@@ -40,6 +40,7 @@ const (
 	END_EXPRESSION_WITH_CONDITION               = "#eewc"
 	END_EXPRESSION_WITH_ASSIGNMENT_AT_FOR_INIT  = "#eewafi"
 	END_EXPRESSION_WITH_DECLARATION_AT_FOR_INIT = "#eewdfi"
+	DEFAULT_INITIALIZATION                      = "#di"
 )
 
 func runOperational(operational string, root *stree.Root, operations *il.Intermediate, ctx *context) error {
@@ -96,11 +97,46 @@ func runOperational(operational string, root *stree.Root, operations *il.Interme
 		return eewafi(root, operations, ctx)
 	case END_EXPRESSION_WITH_DECLARATION_AT_FOR_INIT:
 		return eewdfi(root, operations, ctx)
+	case DEFAULT_INITIALIZATION:
+		return di(root, operations, ctx)
 	//case END_EXPRESSION:
 	//	return ee(root, operations, ctx)
 	default:
 		return errors.New("Bad operational symbol received: " + operational)
 	}
+}
+
+func di(root *stree.Root, operations *il.Intermediate, ctx *context) error {
+	defaultValue := datatype.NewIntDataValue(0)
+	operations.Operations = append(operations.Operations, il.Operation{
+		IlInstruction: il.CAST,
+		LeftOperand: &il.Operand{
+			Type:         il.CONSTANT,
+			Identity:     strconv.Itoa(int(defaultValue.DataAsInt)),
+			OperandValue: &defaultValue,
+		},
+		RightOperand: &il.Operand{
+			Type:         il.TYPE,
+			Identity:     root.CurrentNode.Variable.Type.FullName,
+			OperandValue: nil,
+		},
+		Result: nil,
+	})
+	operations.Operations = append(operations.Operations, il.Operation{
+		IlInstruction: il.STOR,
+		LeftOperand: &il.Operand{
+			Type:         il.VARIABLE,
+			Identity:     root.CurrentNode.Identifier,
+			OperandValue: nil,
+		},
+		RightOperand: &il.Operand{
+			Type:         il.OPERATION,
+			Identity:     strconv.Itoa(len(operations.Operations) - 1),
+			OperandValue: nil,
+		},
+		Result: nil,
+	})
+	return nil
 }
 
 func sa(ctx *context) error {
