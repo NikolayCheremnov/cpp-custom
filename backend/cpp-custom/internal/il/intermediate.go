@@ -46,7 +46,7 @@ func (o *Intermediate) DeclareProcedure(procedureIdentity string) error {
 	return nil
 }
 
-func (o *Intermediate) ExtractArgumentFromStack(argumentIdentity string) error {
+func (o *Intermediate) ExtractArgumentFromStack(ilArgumentIdentity string) error {
 	if len(o.Operations) >= o.OperationsLimit {
 		return errors.New("too much instructions")
 	}
@@ -54,7 +54,7 @@ func (o *Intermediate) ExtractArgumentFromStack(argumentIdentity string) error {
 		IlInstruction: POP,
 		LeftOperand: &Operand{
 			Type:         VARIABLE,
-			Identity:     argumentIdentity,
+			Identity:     ilArgumentIdentity,
 			OperandValue: nil,
 		},
 		RightOperand: nil,

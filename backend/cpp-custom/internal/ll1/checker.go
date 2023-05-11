@@ -146,7 +146,8 @@ func (c *LlChecker) MakeLkAnalyze() {
 
 	// 1.1. prepare context and decorator
 	ctx := &context{"", "", "", "", "",
-		false, []string{}, "", "", []il.Operation{}}
+		false, []string{}, "", "", []il.Operation{},
+		0}
 	// this need to scan identifiers and constants literals
 	scanDecorator := func() (int, string, string) {
 		lexType, lex := c.scanner.Scan()

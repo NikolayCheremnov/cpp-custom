@@ -1,6 +1,9 @@
 package il
 
-import "strconv"
+import (
+	"fmt"
+	"strconv"
+)
 
 func MakeIntermediateOptimization(operations []Operation) ([]Operation, error) {
 	thereAreDistribution := true
@@ -18,9 +21,11 @@ func MakeIntermediateOptimization(operations []Operation) ([]Operation, error) {
 			operations = removeNotUsedCalculationOperations(operations)
 		}
 		operations = removeUnnecessaryTypeCasts(operations)
+		operations = removeUnnecessaryStors(operations)
 		// thereAreDistribution = false
 		operations, thereAreDistribution = distributeConstants(operations)
 	}
+	operations = removeUnreachableCode(operations)
 	return operations, nil
 }
 
@@ -117,6 +122,12 @@ func removeOperation(operations []Operation, removed int) []Operation {
 				operations[i].LeftOperand.Identity = strconv.Itoa(ref - 1)
 			}
 		}
+		if operations[i].IlInstruction == JMPF {
+			ref, _ := strconv.Atoi(operations[i].RightOperand.Identity)
+			if ref >= removed {
+				operations[i].RightOperand.Identity = strconv.Itoa(ref - 1)
+			}
+		}
 	}
 	return operations
 }
@@ -142,33 +153,91 @@ func removeUnnecessaryTypeCasts(operations []Operation) []Operation {
 
 func distributeConstants(operations []Operation) ([]Operation, bool) {
 	thereAreDistribution := false
-	// passCount := 0
+
 	for i := 0; i < len(operations); i++ {
 		if operations[i].IlInstruction == STOR && operations[i].RightOperand.Type == CONSTANT {
 			// need distribution for this variable below to the nearest stor
 			for j := i + 1; j < len(operations); j++ {
+				fmt.Printf("i = %d, j = %d\n", i, j)
+				if i == 78 && j == 79 {
+					a := 1
+					a++
+				}
 				if operations[j].IlInstruction == STOR &&
 					operations[j].LeftOperand.Identity == operations[i].LeftOperand.Identity {
 					break // stop if meet next stor to this variable
-				}
-
-				//if operations[j].IlInstruction == PASS && passCount%2 == 0 {
-				//	passCount++
-				//	// ahead of the cycle
-				//	isCanDistribute := true
-				//
-				//}
-
-				if operations[j].LeftOperand != nil && operations[j].LeftOperand.Identity == operations[i].LeftOperand.Identity {
-					operations[j].LeftOperand = operations[i].RightOperand
-					thereAreDistribution = true
-				}
-				if operations[j].RightOperand != nil && operations[j].RightOperand.Identity == operations[i].LeftOperand.Identity {
-					operations[j].RightOperand = operations[i].RightOperand
-					thereAreDistribution = true
+				} else if operations[j].IlInstruction == PASS && operations[j-1].IlInstruction != JMP {
+					// start cycle from j - need check that there are no non-constant stor to distribution variable
+					isCanDistribute := true
+					for k := j + 1; operations[k].IlInstruction != JMP &&
+						(operations[k].LeftOperand == nil || operations[k].LeftOperand.Identity != strconv.Itoa(j)); k++ {
+						if operations[k].IlInstruction == STOR &&
+							operations[k].LeftOperand.Identity == operations[i].LeftOperand.Identity &&
+							operations[k].RightOperand.Type != CONSTANT {
+							isCanDistribute = false
+							break
+						}
+					}
+					if !isCanDistribute {
+						break // can`t distribute then changed in cycle without constant
+					}
+				} else {
+					if operations[j].LeftOperand != nil && operations[j].LeftOperand.Identity == operations[i].LeftOperand.Identity {
+						operations[j].LeftOperand = operations[i].RightOperand
+						thereAreDistribution = true
+					}
+					if operations[j].RightOperand != nil && operations[j].RightOperand.Identity == operations[i].LeftOperand.Identity {
+						operations[j].RightOperand = operations[i].RightOperand
+						thereAreDistribution = true
+					}
 				}
 			}
 		}
 	}
 	return operations, thereAreDistribution
+}
+
+func removeUnnecessaryStors(operations []Operation) []Operation {
+	for i := 0; i < len(operations); {
+		if operations[i].IlInstruction == STOR {
+			// find nearest stor and shoul only calculations operations between (expression)
+			isUnnecessaryStor := false
+			for j := i + 1; j < len(operations); j++ {
+				if operations[j].IlInstruction == STOR && operations[j].LeftOperand.Identity ==
+					operations[i].LeftOperand.Identity {
+					isUnnecessaryStor = true
+				} else if !isCalculationOperation(operations[j].IlInstruction) {
+					break
+				}
+			}
+			if isUnnecessaryStor {
+				operations = removeOperation(operations, i)
+			} else {
+				i++
+			}
+		} else {
+			i++
+		}
+	}
+	return operations
+}
+
+func removeUnreachableCode(operations []Operation) []Operation {
+	for i := 0; i < len(operations); {
+		if operations[i].IlInstruction == JMPF &&
+			operations[i-1].LeftOperand.Type == CONSTANT && !operations[i-1].LeftOperand.OperandValue.DataAsBool {
+			// always false -> need remove cycle
+			cycleStart := i - 2
+			var j int
+			for j = i - 1; operations[j].IlInstruction != JMP && operations[j].LeftOperand.Identity != strconv.Itoa(cycleStart); j++ {
+			}
+			cycleEnd := j + 1
+			for k := 0; k < cycleEnd-cycleStart+1; k++ {
+				operations = removeOperation(operations, cycleStart)
+			}
+		} else {
+			i++
+		}
+	}
+	return operations
 }

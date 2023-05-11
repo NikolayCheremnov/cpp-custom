@@ -1,6 +1,9 @@
 package ll1
 
-import "cpp-custom/internal/il"
+import (
+	"cpp-custom/internal/il"
+	"strconv"
+)
 
 type context struct {
 	identityLexeme string
@@ -17,6 +20,18 @@ type context struct {
 	assigmentTarget string
 	//
 	deferredOperations []il.Operation
+	//
+	idCounter int
+}
+
+func (ctx *context) counter() int {
+	c := ctx.idCounter
+	ctx.idCounter++
+	return c
+}
+
+func (ctx *context) counterAsString() string {
+	return strconv.Itoa(ctx.counter())
 }
 
 func (ctx *context) saveConstant(constantLex string) {

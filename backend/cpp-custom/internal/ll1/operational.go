@@ -126,7 +126,7 @@ func di(root *stree.Root, operations *il.Intermediate, ctx *context) error {
 		IlInstruction: il.STOR,
 		LeftOperand: &il.Operand{
 			Type:         il.VARIABLE,
-			Identity:     root.CurrentNode.Identifier,
+			Identity:     root.CurrentNode.IlIdentifier,
 			OperandValue: nil,
 		},
 		RightOperand: &il.Operand{
@@ -174,8 +174,9 @@ func pad(root *stree.Root, operations *il.Intermediate, ctx *context) error {
 		return errors.New("redeclaration of '" + ctx.identityLexeme + "'")
 	}
 	argNode := &stree.Node{
-		NodeType:   stree.VARIABLE,
-		Identifier: ctx.identityLexeme,
+		NodeType:     stree.VARIABLE,
+		Identifier:   ctx.identityLexeme,
+		IlIdentifier: ctx.identityLexeme + ctx.counterAsString(),
 		Variable: &datatype.Variable{
 			IsMutable: true,
 			Type:      datatype.Type{FullName: ctx.getFullType()},
@@ -191,7 +192,7 @@ func pad(root *stree.Root, operations *il.Intermediate, ctx *context) error {
 	}
 	root.CurrentNode = argNode
 	//
-	if err := operations.ExtractArgumentFromStack(ctx.identityLexeme); err != nil {
+	if err := operations.ExtractArgumentFromStack(argNode.IlIdentifier); err != nil {
 		return err
 	}
 	//
@@ -326,8 +327,9 @@ func efl(root *stree.Root, operations *il.Intermediate, ctx *context) error {
 
 func flcd(root *stree.Root, ctx *context) error {
 	root.CurrentNode.Right = &stree.Node{
-		NodeType:   stree.VARIABLE,
-		Identifier: ctx.identityLexeme,
+		NodeType:     stree.VARIABLE,
+		Identifier:   ctx.identityLexeme,
+		IlIdentifier: ctx.identityLexeme + ctx.counterAsString(),
 		Variable: &datatype.Variable{
 			IsMutable: true,
 			Type:      datatype.Type{FullName: ctx.getFullType()},
@@ -407,7 +409,7 @@ func pvat(root *stree.Root, operations *il.Intermediate, ctx *context) error {
 	// initialize left operations
 	operations.Operations[lastOperationWithNotFilledLeftOperandIndex].LeftOperand = &il.Operand{
 		Type:         il.VARIABLE,
-		Identity:     variableNode.Identifier,
+		Identity:     variableNode.IlIdentifier,
 		OperandValue: nil,
 	}
 	//operations.Operations[lastOperationWithNotFilledLeftOperandIndex+1].LeftOperand = &il.Operand{
@@ -680,8 +682,9 @@ func variableDeclaration(root *stree.Root, ctx *context, isFirst, isMutable bool
 		return errors.New("redeclaration of '" + ctx.identityLexeme + "'")
 	}
 	variableNode := &stree.Node{
-		NodeType:   stree.VARIABLE,
-		Identifier: ctx.identityLexeme,
+		NodeType:     stree.VARIABLE,
+		Identifier:   ctx.identityLexeme,
+		IlIdentifier: ctx.identityLexeme + ctx.counterAsString(),
 		Variable: &datatype.Variable{
 			IsMutable: isMutable,
 			Type:      datatype.Type{FullName: ctx.getFullType()},
@@ -717,6 +720,7 @@ func extractSingleExpressionOperandFromCtx(root *stree.Root, ctx *context) (*il.
 		return nil, errors.New("can`t get single expression operand from tokens, len != 1")
 	}
 	token := ctx.expressionTokens[0]
+	tokenNode := root.CurrentNode.FindUpByIdentifier(token)
 	if val, err := strconv.Atoi(token); err == nil {
 		value := datatype.NewIntDataValue(int64(val))
 		// then constant
@@ -733,7 +737,7 @@ func extractSingleExpressionOperandFromCtx(root *stree.Root, ctx *context) (*il.
 		}
 		return &il.Operand{
 			Type:         il.VARIABLE,
-			Identity:     token,
+			Identity:     tokenNode.IlIdentifier,
 			OperandValue: nil,
 		}, nil
 	}
@@ -779,7 +783,7 @@ func expressionTokensToOperationsSlice(root *stree.Root, ctx *context) ([]il.Ope
 				}
 				operand = il.Operand{
 					Type:         il.VARIABLE,
-					Identity:     token,
+					Identity:     variableNode.IlIdentifier,
 					OperandValue: nil,
 				}
 			}
@@ -896,7 +900,7 @@ func processStorExpressionResult(storTarget *stree.Node, root *stree.Root, opera
 		IlInstruction: il.STOR,
 		LeftOperand: &il.Operand{
 			Type:         il.VARIABLE,
-			Identity:     storTarget.Identifier,
+			Identity:     storTarget.IlIdentifier,
 			OperandValue: nil,
 		},
 		RightOperand: &il.Operand{

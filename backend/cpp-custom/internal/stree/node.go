@@ -15,9 +15,10 @@ const (
 )
 
 type Node struct {
-	NodeType   string
-	Identifier string
-	Variable   *datatype.Variable
+	NodeType     string
+	Identifier   string
+	IlIdentifier string
+	Variable     *datatype.Variable
 	// nodes pointers
 	Parent *Node
 	Right  *Node
@@ -55,10 +56,14 @@ func (node *Node) FindUpByIdentifier(identifier string) *Node {
 }
 
 func (node *Node) NodeAsString() string {
-	if node.Variable != nil {
-		return node.NodeType + " : " + node.Identifier + " : " + node.Variable.VariableToString()
+	ilIdentifier := ""
+	if node.IlIdentifier != "" {
+		ilIdentifier = "(" + node.IlIdentifier + ")"
 	}
-	return node.NodeType + " : " + node.Identifier
+	if node.Variable != nil {
+		return node.NodeType + " : " + node.Identifier + ilIdentifier + " : " + node.Variable.VariableToString()
+	}
+	return node.NodeType + " : " + node.Identifier + ilIdentifier
 }
 
 func (node *Node) SubtreeAsString(builder *strings.Builder, offset int) {
